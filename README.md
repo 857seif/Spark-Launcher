@@ -24,7 +24,16 @@
 * **Low-Memory Mode:** Automatically frees unallocated heap memory and throttles background operations while the game runs.
 
 ### 🔓 Offline
-* **Offline / Cracked Play:** Launch and play locally without requiring a Microsoft account authentication.
+* **Offline / Cracked Play:** Launch and play locally without requiring a Microsoft account authentication.*
+
+
+* ### 🔨how to install
+* download the source code and extract to a seprate folder
+* now open cmd inside the that folder and run
+* python -m pip install -r requirments.txt
+* and then run the bat file if you are windows
+* or the sh file for linux and have fun
+* remember you must have python installed
 
 
 
