@@ -6,8 +6,7 @@
 
 **A feature-packed, lightweight custom Minecraft launcher with built-in server hosting, multi-loader management, offline support, and real-time FPS optimization.**
 
-[![Downloads](https://img.shields.io/badge/Downloads-1M%2B-brightgreen?style=flat-square)](https://spark-launcher.dev)
-[![Version](https://img.shields.io/badge/Version-2.0.0-blue?style=flat-square)](https://spark-launcher.dev)
+
 [![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 
 </div>
