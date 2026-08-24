@@ -1,0 +1,5 @@
+minecraft_launcher_lib>=8.0
+ttkbootstrap
+requests
+psutil
+Pillow
