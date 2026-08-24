@@ -7,7 +7,6 @@
 **A feature-packed, lightweight custom Minecraft launcher with built-in server hosting, multi-loader management, offline support, and real-time FPS optimization.**
 
 
-[![License](https://img.shields.io/badge/License-MIT-yellow?style=flat-square)](LICENSE)
 
 </div>
 
