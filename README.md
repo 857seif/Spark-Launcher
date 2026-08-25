@@ -176,8 +176,8 @@
   <tbody>
     <tr>
       <td>OS</td>
-      <td>Windows 7+ / Linux</td>
-      <td>Windows 10+ / Linux</td>
+      <td>Windows 7+</td>
+      <td>Windows 10+</td>
     </tr>
     <tr>
       <td>RAM</td>
