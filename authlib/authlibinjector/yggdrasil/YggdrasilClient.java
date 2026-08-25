@@ -1,6 +1,4 @@
-/*
- * Decompiled with CFR 0.152.
- */
+
 package moe.yushi.authlibinjector.yggdrasil;
 
 import java.io.IOException;
