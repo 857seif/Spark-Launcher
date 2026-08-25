@@ -21,20 +21,12 @@ from threading import Thread
 import requests
 import psutil
 from tkinter import simpledialog
-
-# When frozen (compiled exe), work out of the exe's folder from the start
-if getattr(sys, "frozen", False):
-    try:
-        os.chdir(os.path.dirname(sys.executable))
-    except Exception:
-        pass
 import ssl
 from requests.adapters import HTTPAdapter
 try:
     from urllib3.util.retry import Retry
 except Exception:
     Retry = None
-
 
 class _TLSAdapter(HTTPAdapter):
     def __init__(self, ssl_ctx=None, **kw):
@@ -46,9 +38,8 @@ class _TLSAdapter(HTTPAdapter):
             kwargs["ssl_context"] = self._ssl_ctx
         return super().init_poolmanager(*args, **kwargs)
 
-
 def _build_session():
-    """Hardened requests session: TLS 1.2 fallback, legacy ciphers, auto-retries."""
+                                                                                    
     s = requests.Session()
     ctx = ssl.create_default_context()
     try:
@@ -75,17 +66,16 @@ def _build_session():
     s.mount("http://", HTTPAdapter())
     return s
 
-
 SESSION = _build_session()
 
-# Make all minecraft-launcher-lib downloads use the hardened session
+                                                                    
 try:
     import minecraft_launcher_lib._helper as _mll_helper
     _mll_helper.requests = SESSION
 except Exception:
     pass
 
-# Surface installer (Forge/NeoForge/Quilt) stdout/stderr instead of swallowing them
+                                                                                   
 def _patch_installer_errors():
     try:
         import types
@@ -113,11 +103,10 @@ def _patch_installer_errors():
     except Exception:
         pass
 
-
 _patch_installer_errors()
 
-# Replace the lib's download_file with a resumable, auto-retrying version so
-# flaky networks / SSL resets don't kill big downloads (assets, jars, installers)
+                                                                            
+                                                                                 
 def _patch_lib_downloads():
     try:
         import importlib
@@ -142,11 +131,10 @@ def _patch_lib_downloads():
             callback.get("setStatus", _h.empty)("Download " + os.path.basename(path))
 
             sess = session if session is not None else SESSION
-            part_path = path + ".luncher-part"
+            part_path = path + ".spark-part"
             max_attempts = 8
             last_err = None
             for attempt in range(1, max_attempts + 1):
-                last = attempt == max_attempts
                 try:
                     headers = {"user-agent": _h.get_user_agent()}
                     mode = "wb"
@@ -163,7 +151,7 @@ def _patch_lib_downloads():
                             continue
                         r.raise_for_status()
                         if attempt > 1 and r.status_code != 206 and mode == "ab":
-                            mode = "wb"  # server ignored the range, start over
+                            mode = "wb"                                        
                         with open(part_path, mode) as f:
                             if lzma_compressed:
                                 f.write(_lzma.decompress(r.content))
@@ -173,23 +161,10 @@ def _patch_lib_downloads():
                     if sha1 is not None:
                         checksum = _h.get_sha1_hash(part_path)
                         if checksum != sha1:
-                            if last:
-                                # final resort: keep the file so a tampering
-                                # middlebox doesn't hard-block the user
-                                _shutil.move(part_path, path)
-                                if _CHECKSUM_WARN_HOOK:
-                                    try:
-                                        _CHECKSUM_WARN_HOOK(
-                                            f"[download] Checksum mismatch for {os.path.basename(path)} "
-                                            "(expected a different file) — using it anyway.", "warn")
-                                    except Exception:
-                                        pass
-                                return True
                             try:
                                 os.remove(part_path)
                             except Exception:
-                                # file locked (e.g. AV scan) — switch to a fresh name
-                                part_path = f"{path}.luncher-part{attempt}"
+                                pass
                             last_err = _mlex.InvalidChecksum(url, path, sha1, checksum)
                             continue
                     _shutil.move(part_path, path)
@@ -216,10 +191,7 @@ def _patch_lib_downloads():
     except Exception:
         pass
 
-
 _patch_lib_downloads()
-
-_CHECKSUM_WARN_HOOK = None
 
 try:
     from ttkbootstrap import Style
@@ -228,11 +200,7 @@ except Exception:
     HAS_BOOTSTRAP = False
 
 if HAS_BOOTSTRAP:
-    try:
-        style = Style(theme="darkly")
-    except Exception:
-        style = None
-        HAS_BOOTSTRAP = False
+    style = Style(theme="darkly")
 else:
     style = None
 
@@ -262,7 +230,9 @@ default_settings = {
     "setting-info": [{"fps_boost_selected": False, "allocated_ram_selected": default_ram}],
     "allocated_ram": default_ram,
     "jvm-args": None,
-    "executablePath": "java"
+    "executablePath": "java",
+    "last_game_type": "Vanilla",
+    "last_version": None
 }
 
 if not os.path.exists("settings.json"):
@@ -270,8 +240,6 @@ if not os.path.exists("settings.json"):
         json.dump(default_settings, f, indent=4)
 
 def load_settings():
-    if not os.path.exists("settings.json"):
-        save_settings(default_settings)
     with open("settings.json", "r") as f:
         s = f.read().replace("\t", "").replace("\n", "").replace(",}", "}").replace(",]", "]")
         return json.loads(s)
@@ -335,9 +303,8 @@ if not os.path.exists(mc_dir):
     except Exception:
         pass
 
-
 class RoundedFrame(tk.Canvas):
-    """Canvas-drawn rounded card (modern look, works everywhere)."""
+                                                                    
 
     def __init__(self, parent, bg, border, radius=14, surround=None, **kw):
         try:
@@ -367,9 +334,8 @@ class RoundedFrame(tk.Canvas):
         self.configure(bg=self.surround)
         self._rr(1, 1, w - 2, h - 2, self.radius, fill=self.card_bg, outline=self.card_border)
 
-
 class RoundButton(tk.Canvas):
-    """Flat rounded-rectangle button drawn on a canvas, with hover + press states."""
+                                                                                     
 
     def __init__(self, parent, launcher, text, command, bg, hover, fg="#ffffff",
                  base=10, weight=None, radius=12, surround=None, w=None, h=None):
@@ -466,7 +432,6 @@ class RoundButton(tk.Canvas):
             except Exception:
                 pass
 
-
 class Pycraft:
     def __init__(self):
         self.data = load_settings()
@@ -482,7 +447,7 @@ class Pycraft:
         else:
             self.window = tk.Tk()
 
-        self.window.title("SPARK LAUNCHER")
+        self.window.title("Spark-Launcher")
         try:
             self.window.iconbitmap("icon.ico")
         except Exception:
@@ -492,11 +457,11 @@ class Pycraft:
         sw = self.window.winfo_screenwidth()
         sh = self.window.winfo_screenheight()
 
-        # Fit screen: prefer up to 1100x650, but always fit 720p and smaller
+                                                                            
         margin_x, margin_y = 40, 60
         max_w = min(1100, sw - margin_x)
         max_h = min(650, sh - margin_y)
-        # Minimum usable size for very small screens
+                                                    
         self.W = max(720, max_w) if sw >= 800 else max(640, sw - 20)
         self.H = max(480, max_h) if sh >= 560 else max(420, sh - 40)
         if sw <= 1280:
@@ -550,10 +515,8 @@ class Pycraft:
         self._srv_selected = None
         self._srv_status = "offline"
         self._fm_path = None
-        global _CHECKSUM_WARN_HOOK
-        _CHECKSUM_WARN_HOOK = self._console_write
 
-        # macOS-style borderless window (custom title bar, traffic lights, edge resize)
+                                                                                       
         self.window.overrideredirect(True)
         self._rz_handles = []
         self.window.after(60, self._post_win_setup)
@@ -623,7 +586,7 @@ class Pycraft:
         btn.bind("<Enter>", lambda e: btn.config(bg=hover_color))
         btn.bind("<Leave>", lambda e: btn.config(bg=normal))
 
-    # ---- macOS-style window chrome ----
+                                         
     def _post_win_setup(self):
         if os.name != "nt":
             return
@@ -632,19 +595,19 @@ class Pycraft:
             user32 = ctypes.windll.user32
             hwnd = user32.GetParent(self.window.winfo_id()) or self.window.winfo_id()
             self._hwnd = hwnd
-            # rounded window corners (Win11)
+                                            
             try:
-                pref = ctypes.c_int(2)  # DWMWCP_ROUND
+                pref = ctypes.c_int(2)                
                 ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(pref), 4)
                 dark = ctypes.c_int(1)
                 ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(dark), 4)
             except Exception:
                 pass
-            # keep the taskbar button for borderless windows
+                                                            
             try:
                 GWL_EXSTYLE = -20
                 style = user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
-                style = (style | 0x40000) & ~0x80  # APPWINDOW on, TOOLWINDOW off
+                style = (style | 0x40000) & ~0x80                                
                 user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
                 self.window.withdraw()
                 self.window.after(30, self.window.deiconify)
@@ -745,13 +708,12 @@ class Pycraft:
         return int(v * self.sy)
 
     def _update_colmap(self):
-        # center the client content block in the 1100-wide design space
         if self.W < 900:
-            self._colmap = {"col1": 250, "col2": 550, "col3": 550,
+            self._colmap = {"col1": 0, "col2": 300, "col3": 300,
                             "fy": 220, "by": 312, "dly": 368, "sety": 418,
                             "pw": 202, "brx": 220, "bw": 300}
         else:
-            self._colmap = {"col1": 70, "col2": 390, "col3": 710,
+            self._colmap = {"col1": 0, "col2": 320, "col3": 640,
                             "fy": 64, "by": 156, "dly": 212, "sety": 262,
                             "pw": 222, "brx": 240, "bw": 320}
 
@@ -759,7 +721,7 @@ class Pycraft:
         return self._colmap[v] if isinstance(v, str) else v
 
     def _put(self, w, x, y, wd=None, ht=None, font=None):
-        """Place a widget using design coordinates and register it for relayout on resize."""
+                                                                                             
         self._layout_specs.append([w, x, y, wd, ht])
         kw = {"x": self._x(self._resolve(x)), "y": self._y(self._resolve(y))}
         if wd is not None:
@@ -812,25 +774,25 @@ class Pycraft:
         self._put(self.canvas, 0, 0, 1100, 650)
         self._draw_background()
 
-        # Client widgets live directly on the window so the background image
-        # shows through between the cards (translucent look)
+                                                                            
+                                                            
         self.overlay = self.window
 
-        # Server page (created early so it stacks above the canvas/overlay but below the header)
+                                                                                                
         self.server_frame = tk.Frame(self.window, bg=self.bg)
         self._put(self.server_frame, 0, 0, 1100, 650)
         self._keep_hidden.add(self.server_frame)
         self.server_frame.place_forget()
         self._build_server_page()
 
-        # Header layer (always visible on every tab, above the server page)
+                                                                           
         self._always_visible = set()
         self.header_frame = tk.Frame(self.window, bg=self.bg, bd=0, highlightthickness=0)
         self._put(self.header_frame, 0, 0, 1100, 48)
         self._always_visible.add(self.header_frame)
         self._always_visible.add(self.overlay)
 
-        # macOS traffic lights
+                              
         self._traffic_light(self.header_frame, 14, "#ff5f57", "#ff8a80", "✕", self.window.destroy)
         self._traffic_light(self.header_frame, 34, "#febc2e", "#ffdd7a", "−", self.window.iconify)
         self._traffic_light(self.header_frame, 54, "#28c840", "#5ee07a", "⤢", self._toggle_max)
@@ -845,22 +807,22 @@ class Pycraft:
         self.f_tiny = ("Segoe UI", max(7, self._fs(8)))
         self.f_title = ("Segoe UI", self._fs(20), "bold")
 
-        # Header
-        title_lbl = tk.Label(self.header_frame, text="SPARK LAUNCHER", bg=self.bg, fg=self.fg)
+                
+        title_lbl = tk.Label(self.header_frame, text="Spark-Launcher", bg=self.bg, fg=self.fg)
         self._put(title_lbl, 86, 2, font=(16, "bold"))
         self._always_visible.add(title_lbl)
         accent_bar = tk.Frame(self.header_frame, bg=self.accent, bd=0)
         self._put(accent_bar, 88, 30, 36, 3)
         self._always_visible.add(accent_bar)
         sub_lbl = tk.Label(self.header_frame, text="MINECRAFT LAUNCHER", bg=self.bg, fg=self.muted)
-        self._put(sub_lbl, 88, 29, font=(7, None))
+        self._put(sub_lbl, 132, 29, font=(7, None))
         self._always_visible.add(sub_lbl)
         for w in (self.header_frame, title_lbl, sub_lbl, accent_bar):
             w.bind("<Button-1>", self._drag_start)
             w.bind("<B1-Motion>", self._drag_motion)
         self.header_frame.bind("<Double-Button-1>", lambda e: self._toggle_max())
 
-        # Tabs
+              
         self.tab_client = tk.Label(self.header_frame, text="CLIENT", bg=self.bg, fg=self.accent, cursor="hand2")
         self._put(self.tab_client, 880, 12, font=(11, "bold"))
         self._always_visible.add(self.tab_client)
@@ -876,7 +838,7 @@ class Pycraft:
         self.tab_client.bind("<Button-1>", lambda e: self._switch_tab("client"))
         self.tab_server.bind("<Button-1>", lambda e: self._switch_tab("server"))
 
-        # ---- Account card ----
+                                
         acc_card = RoundedFrame(self.overlay, self.card, self.border, radius=18, surround=self.bg)
         self._put(acc_card, "col1", 64, 280, 356)
         self._field_label(acc_card, "Username", 14, 12)
@@ -915,7 +877,7 @@ class Pycraft:
         self.window.bind_all("<MouseWheel>", self._accounts_mousewheel, add="+")
         self._refresh_accounts()
 
-        # ---- Game card ----
+                             
         game_card = RoundedFrame(self.overlay, self.card, self.border, radius=18, surround=self.bg)
         self._put(game_card, "col2", 64, 300, 226)
         self._field_label(game_card, "Game Type", 14, 12)
@@ -925,7 +887,12 @@ class Pycraft:
             values=("Vanilla", "Forge", "NeoForge", "Fabric", "Quilt"), state="readonly"
         )
         self._put(self.download_options, 14, 32, 272, font=(10, None))
-        self.download_options.current(0)
+        _last_type = self.data.get("last_game_type") or "Vanilla"
+        _types = ("Vanilla", "Forge", "NeoForge", "Fabric", "Quilt")
+        if _last_type in _types:
+            self.download_options.current(_types.index(_last_type))
+        else:
+            self.download_options.current(0)
         self.download_options.bind("<<ComboboxSelected>>", self._on_type_change)
         self._field_label(game_card, "Versions", 14, 72)
         self.installed_only = StringVar(value="deselected")
@@ -938,6 +905,7 @@ class Pycraft:
         self._put(self.versionsList, 14, 92, 234, font=(10, None))
         self.versionsList["values"] = ["Loading..."]
         self.versionsList.current(0)
+        self.versionsList.bind("<<ComboboxSelected>>", self._save_last_selection)
         addv_b = self._button(game_card, "+", self._add_custom_version, self.gray_btn, self.gray_hover, f_btn, w=34, h=28, radius=12)
         self._put(addv_b, 252, 92, 34, 28, font=(12, "bold"))
         self._field_label(game_card, "Instance", 14, 132)
@@ -955,12 +923,12 @@ class Pycraft:
         self._put(del_b, 200, 184, 86, 28, font=(9, None))
         self._refresh_instances()
 
-        # ---- Mods button (mod-loadable types only) ----
+                                                         
         self.mods_btn = self._button(self.overlay, "⬇  MODS", self.open_mods_window, self.gray_btn, self.gray_hover, f_btn, radius=12)
         self._put(self.mods_btn, "col2", 298, 300, 36, font=(11, "bold"))
         self.mods_btn.place_forget()
 
-        # ---- Launch column ----
+                                 
         folder_card = RoundedFrame(self.overlay, self.card, self.border, radius=18, surround=self.bg)
         self._put(folder_card, "col3", "fy", "bw", 76)
         self._field_label(folder_card, "Minecraft Folder", 14, 10)
@@ -977,22 +945,22 @@ class Pycraft:
         set_b = self._button(self.overlay, "⚙   SETTINGS", self.open_settings, self.gray_btn, self.gray_hover, f_label)
         self._put(set_b, "col3", "sety", "bw", 36, font=(10, None))
 
-        # ---- Status bar ----
+                              
         sep = tk.Frame(self.overlay, bg=self.border, bd=0)
         self._put(sep, 0, 584, 1068, 2)
         self.status_dot = tk.Label(self.overlay, text="●", bg=self.bg, fg=self.green)
-        self._put(self.status_dot, 70, 592, font=(9, None))
+        self._put(self.status_dot, 0, 592, font=(9, None))
         self.status_lbl = tk.Label(self.overlay, text="Ready", bg=self.bg, fg=self.muted)
-        self._put(self.status_lbl, 86, 592, font=(9, None))
+        self._put(self.status_lbl, 16, 592, font=(9, None))
         self.console_btn = tk.Label(self.overlay, text="⌨  Console", bg=self.bg, fg=self.muted, cursor="hand2")
-        self._put(self.console_btn, 244, 592, font=(9, None))
+        self._put(self.console_btn, 170, 592, font=(9, None))
         self.console_btn.bind("<Button-1>", lambda e: self._toggle_console())
         self.console_btn.bind("<Enter>", lambda e: self.console_btn.config(fg=self.accent))
         self.console_btn.bind("<Leave>", lambda e: self.console_btn.config(fg=self.accent if self.console_visible else self.muted))
         self.instance_chip = tk.Label(self.overlay, text="◈  Default", bg=self.bg, fg=self.muted)
-        self._put(self.instance_chip, 384, 592, font=(9, None))
+        self._put(self.instance_chip, 290, 592, font=(9, None))
 
-        # ---- Download progress bar (hidden until a download starts) ----
+                                                                          
         self.progress_bar = ttk.Progressbar(self.overlay, mode="determinate", maximum=100)
         self._put(self.progress_bar, 320, 588, 640, 16)
         self.progress_lbl = tk.Label(self.overlay, text="", bg=self.bg, fg=self.muted)
@@ -1021,7 +989,7 @@ class Pycraft:
         if img is not None:
             try:
                 from PIL import Image, ImageTk
-                # scale to fill the window, preserving aspect ratio (center crop)
+                                                                                 
                 iw, ih = img.size
                 scale = max(self.W / max(1, iw), self.H / max(1, ih))
                 nw, nh = max(1, int(iw * scale)), max(1, int(ih * scale))
@@ -1126,7 +1094,7 @@ class Pycraft:
                 self.window.after_cancel(self._resize_job)
             except Exception:
                 pass
-        # cheap widget pass almost immediately, expensive bg render later
+                                                                         
         self._rz_fast_job = self.window.after(25, self._relayout_widgets)
         self._resize_job = self.window.after(180, self._relayout)
 
@@ -1166,7 +1134,7 @@ class Pycraft:
                 widget.config(font=("Segoe UI", self._fs(base), weight) if weight else ("Segoe UI", self._fs(base)))
             except Exception:
                 pass
-        # keep chrome above page content
+                                        
         try:
             self.header_frame.lift()
             for h in self._rz_handles:
@@ -1174,7 +1142,7 @@ class Pycraft:
         except Exception:
             pass
 
-    # ---- console (pop-out window) ----
+                                        
     def _build_console(self):
         self.console_win = None
         self.console_text = None
@@ -1263,7 +1231,7 @@ class Pycraft:
             return "err"
         if "warn" in low:
             return "warn"
-        if text.startswith("[spark]") or text.startswith("[download]"):
+        if text.startswith("[Spark-Launcher]") or text.startswith("[download]"):
             return "info"
         return None
 
@@ -1342,7 +1310,7 @@ class Pycraft:
             self._last_dl_pct = pct
             self._console_write(f"[download] {'█' * (pct // 5)}{'-' * (20 - pct // 5)} {pct}%")
 
-    # ---- crash assistant ----
+                               
     def _after_game_exit(self, code, detected):
         self._mc_proc = None
         if code == 0:
@@ -1567,7 +1535,7 @@ class Pycraft:
                 label = f'{i["type"]} {i["id"]}'
                 versions.append(label)
                 vmap[label] = i["id"]
-            # local/custom versions that are not in the Mojang manifest
+                                                                       
             for vid in sorted(installed_ids - set(vmap.values())):
                 label = f"custom {vid}"
                 versions.append(label)
@@ -1579,7 +1547,7 @@ class Pycraft:
                 self.versions_map = vmap
                 self.versionsList["values"] = versions or ["No downloaded versions"]
                 if versions:
-                    self.versionsList.current(0)
+                    self._select_last_version(versions)
                 else:
                     self.versionsList.set("No downloaded versions")
                 self.status_lbl.config(text="Ready")
@@ -1601,7 +1569,7 @@ class Pycraft:
                     return
                 self.versionsList["values"] = lst or ["No Forge versions found"]
                 if lst:
-                    self.versionsList.current(0)
+                    self._select_last_version(lst)
                 else:
                     self.versionsList.set("No Forge versions found")
                 self.status_lbl.config(text="Ready")
@@ -1623,7 +1591,7 @@ class Pycraft:
                     return
                 self.versionsList["values"] = lst or ["No Fabric versions found"]
                 if lst:
-                    self.versionsList.current(0)
+                    self._select_last_version(lst)
                 else:
                     self.versionsList.set("No Fabric versions found")
                 self.status_lbl.config(text="Ready")
@@ -1646,7 +1614,7 @@ class Pycraft:
                     return
                 self.versionsList["values"] = lst or ["No NeoForge versions found"]
                 if lst:
-                    self.versionsList.current(0)
+                    self._select_last_version(lst)
                 else:
                     self.versionsList.set("No NeoForge versions found")
                 self.status_lbl.config(text="Ready")
@@ -1668,15 +1636,47 @@ class Pycraft:
                     return
                 self.versionsList["values"] = lst or ["No Quilt versions found"]
                 if lst:
-                    self.versionsList.current(0)
+                    self._select_last_version(lst)
                 else:
                     self.versionsList.set("No Quilt versions found")
                 self.status_lbl.config(text="Ready")
             self.window.after(0, apply)
         Thread(target=work, daemon=True).start()
 
+    def _save_last_selection(self, event=None):
+        try:
+            data = load_settings()
+            data["last_game_type"] = self.download_options.get()
+            data["last_version"] = self.versionsList.get()
+            save_settings(data)
+            self.data = data
+        except Exception:
+            pass
+
+    def _select_last_version(self, versions):
+        last = None
+        try:
+            last = (self.data or {}).get("last_version")
+        except Exception:
+            pass
+        if last and versions and last in list(versions):
+            try:
+                self.versionsList.current(list(versions).index(last))
+                return
+            except Exception:
+                pass
+        if versions:
+            self.versionsList.current(0)
+
     def _on_type_change(self, event=None):
         t = self.download_options.get()
+        try:
+            data = load_settings()
+            data["last_game_type"] = t
+            save_settings(data)
+            self.data = data
+        except Exception:
+            pass
         if t == "Vanilla":
             self._keep_hidden.add(self.mods_btn)
             try:
@@ -1728,7 +1728,7 @@ class Pycraft:
         except Exception as e:
             showerror("Error", str(e))
             return
-        self._console_write(f"[spark] Added custom version: {name}", "info")
+        self._console_write(f"[Spark-Launcher] Added custom version: {name}", "info")
         showinfo("Version added", f"'{name}' was added to '{os.path.basename(self._target_dir())}'.")
         self._load_vanilla_versions()
 
@@ -1749,7 +1749,7 @@ class Pycraft:
             self._refresh_instances()
             self._load_vanilla_versions()
 
-    # ---- instances ----
+                         
     def _instances_dir(self):
         base = self.path_var.get() if getattr(self, "path_var", None) else None
         return os.path.join(base or self.mc_dir, "instances")
@@ -1819,7 +1819,7 @@ class Pycraft:
         self._refresh_instances()
         self.instance_var.set(name)
         self._on_instance_change()
-        self._console_write(f"[spark] Created instance: {name}", "info")
+        self._console_write(f"[Spark-Launcher] Created instance: {name}", "info")
 
     def _open_instance_folder(self):
         p = self._target_dir()
@@ -1841,12 +1841,12 @@ class Pycraft:
         except Exception as e:
             showerror("Error", str(e))
             return
-        self._console_write(f"[spark] Deleted instance: {name}", "info")
+        self._console_write(f"[Spark-Launcher] Deleted instance: {name}", "info")
         self.instance_var.set("Default")
         self._refresh_instances()
         self._on_instance_change()
 
-    # ---- server panel ----
+                            
     _SERVER_SOFTWARE = {
         "Vanilla": {"id": "vanilla", "cls": "Vanilla", "desc": "The official Mojang server", "color": "#8a93a6"},
         "Paper": {"id": "paper", "cls": "Plugins", "desc": "Plugin server — high performance (Bukkit/Spigot plugins)", "color": "#22c55e"},
@@ -1900,7 +1900,7 @@ class Pycraft:
                 return "127.0.0.1"
 
     def _build_server_page(self):
-        pass  # content is built by _srv_render_page
+        pass                                        
 
     def _srv_render_page(self):
         for w in self.server_frame.winfo_children():
@@ -1927,7 +1927,7 @@ class Pycraft:
         page = tk.Frame(self.server_frame, bg=self.bg)
         page.place(x=self._x(16), y=self._y(64), width=self._x(1068), height=self._y(560))
 
-        # Sidebar
+                 
         side = RoundedFrame(page, self.card, self.border, radius=18, surround=self.bg)
         side.pack(side="left", fill="y", padx=(0, 12))
         tk.Label(side, text="SERVERS", font=self.f_tiny, bg=self.card, fg=self.muted).pack(anchor="w", padx=10, pady=(10, 4))
@@ -1945,7 +1945,7 @@ class Pycraft:
         add_b = self._button(side, "＋  Add Server", self._srv_open_create, self.green, self.green_hover, self.f_small, w=self._x(180), h=self._x(30), radius=12)
         add_b.pack(padx=8, pady=(0, 10))
 
-        # Dashboard
+                   
         dash = tk.Frame(page, bg=self.bg)
         dash.pack(side="left", fill="both", expand=True)
         meta = self._srv_meta_load(self._srv_dir(self._srv_selected)) if self._srv_selected else {}
@@ -1970,17 +1970,6 @@ class Pycraft:
         self.srv_toggle.pack(side="right")
         self.srv_delete_btn = self._button(head, "DELETE", self._srv_delete_server, self.red, self.red_hover, f_btn, w=self._x(110), h=self._x(34), radius=12)
         self.srv_delete_btn.pack(side="right", padx=(0, 8))
-        _soft_id = meta.get("software", "vanilla")
-        if _soft_id in ("paper", "purpur", "velocity"):
-            self.srv_mods_btn = self._button(head, "PLUGIN STORE" if _soft_id == "velocity" else "PLUGINS",
-                                             lambda: self.open_mods_window("server", self._srv_selected),
-                                             self.accent, self.accent_hover, f_btn, w=self._x(130), h=self._x(34), radius=12)
-            self.srv_mods_btn.pack(side="right", padx=(0, 8))
-        elif _soft_id in ("forge", "fabric"):
-            self.srv_mods_btn = self._button(head, "MODS",
-                                             lambda: self.open_mods_window("server", self._srv_selected),
-                                             self.accent, self.accent_hover, f_btn, w=self._x(100), h=self._x(34), radius=12)
-            self.srv_mods_btn.pack(side="right", padx=(0, 8))
 
         info = RoundedFrame(dash, self.card, self.border, radius=16, surround=self.bg)
         info.pack(fill="x", pady=(10, 8))
@@ -1996,7 +1985,7 @@ class Pycraft:
         cols = tk.Frame(dash, bg=self.bg)
         cols.pack(fill="both", expand=True)
 
-        # Console
+                 
         con = RoundedFrame(cols, self.card, self.border, radius=16, surround=self.bg)
         con.pack(side="left", fill="both", expand=True, padx=(0, 10))
         tk.Label(con, text="CONSOLE", font=self.f_tiny, bg=self.card, fg=self.muted).pack(anchor="w", padx=8, pady=(6, 0))
@@ -2026,7 +2015,7 @@ class Pycraft:
         send_b = self._button(send_row, "Send", self._srv_send, self.accent, self.accent_hover, self.f_small, w=60, h=28, radius=12)
         send_b.pack(side="left", padx=(6, 0))
 
-        # Right column: players + files
+                                       
         right = tk.Frame(cols, bg=self.bg, width=self._x(280))
         right.pack(side="right", fill="y")
         right.pack_propagate(False)
@@ -2069,7 +2058,7 @@ class Pycraft:
         low = line.lower()
         if "error" in low or "exception" in low or "warn" in low and "error" in low:
             return "err"
-        if line.startswith("[spark]"):
+        if line.startswith("[Spark-Launcher]"):
             return "info"
         return None
 
@@ -2418,7 +2407,7 @@ class Pycraft:
             "online-mode": "true" if meta.get("online_mode") else "false",
             "max-players": str(meta.get("max_players", 20)),
             "server-port": str(meta.get("port", 25565)),
-            "motd": f"{meta.get('name', 'server')} — luncher server",
+            "motd": f"{meta.get('name', 'Spark-Launcher')} — Spark-Launcher server",
         }
         lines = []
         if os.path.isfile(p):
@@ -2478,8 +2467,8 @@ class Pycraft:
             pass
 
     def _srv_preload_vanilla(self, d, meta):
-        """Pre-download the vanilla server jar (resumable) so paperclip doesn't
-        have to download it itself — its downloader has no retry support."""
+\
+                                                                            
         import minecraft_launcher_lib._helper as _h
         version = meta.get("version")
         cache_dir = os.path.join(d, "cache")
@@ -2551,10 +2540,10 @@ class Pycraft:
                 code = proc.wait()
                 self._srv_proc = None
                 self._srv_players.clear()
-                self._srv_q.put(f"[spark] Server stopped (exit code {code})")
+                self._srv_q.put(f"[Spark-Launcher] Server stopped (exit code {code})")
                 self.window.after(0, lambda: self._srv_set_status("offline"))
             except Exception as e:
-                self._srv_q.put(f"[spark] Error: {e}")
+                self._srv_q.put(f"[Spark-Launcher] Error: {e}")
                 self.window.after(0, lambda: self._srv_set_status("offline"))
 
         Thread(target=work, daemon=True).start()
@@ -2628,7 +2617,7 @@ class Pycraft:
         except Exception:
             pass
 
-    # ---- server file manager ----
+                                   
     def _fm_refresh(self):
         try:
             if not hasattr(self, "srv_files_list") or not self.srv_files_list.winfo_exists():
@@ -2642,7 +2631,7 @@ class Pycraft:
                 self.srv_files_list.insert("end", "📁  ..")
             entries = sorted(os.listdir(d), key=str.lower)
             for name in entries:
-                if name.endswith(".luncher-part"):
+                if name.endswith(".spark-part"):
                     continue
                 if os.path.isdir(os.path.join(d, name)):
                     self.srv_files_list.insert("end", f"📁  {name}")
@@ -2700,9 +2689,9 @@ class Pycraft:
         except Exception as e:
             showerror("Error", str(e))
 
-    # ---- mod downloader ----
+                              
     _LOADER_IDS = {"Forge": "forge", "NeoForge": "neoforge", "Fabric": "fabric", "Quilt": "quilt"}
-    _MODRINTH_UA = {"User-Agent": "SparkLauncher/1.0 (minecraft instance launcher)"}
+    _MODRINTH_UA = {"User-Agent": "Spark-Launcher/1.0 (minecraft instance launcher)"}
 
     def _loader_id(self):
         return self._LOADER_IDS.get(self.download_options.get())
@@ -2718,76 +2707,25 @@ class Pycraft:
             return v.split("-", 1)[0]
         return v
 
-    # ---- mod downloader (tabs: mods / shaders / resource packs / plugins) ----
-    _LOADER_IDS = {"Forge": "forge", "NeoForge": "neoforge", "Fabric": "fabric", "Quilt": "quilt"}
-    _MODRINTH_UA = {"User-Agent": "SparkLauncher/1.0 (minecraft instance launcher)"}
-    _MOD_CATEGORIES = ["", "optimization", "utility", "adventure", "decoration", "equipment",
-                       "food", "game-mechanics", "library", "magic", "management", "mobs",
-                       "social", "storage", "technology", "transportation", "worldgen"]
-    _PLUGIN_CATEGORIES = ["", "utility", "chat", "dev", "economy", "game-mechanics", "games",
-                          "protection", "social", "teleport", "world-editing"]
-    _SHADER_CATEGORIES = ["", "cartoon", "fantasy", "realistic", "semi-realistic", "vanilla-like"]
-    _PACK_CATEGORIES = ["", "8x", "16x", "32x", "64x", "128x", "256x", "audio", "fonts", "icons", "simplistic"]
-
-    def _loader_id(self):
-        return self._LOADER_IDS.get(self.download_options.get())
-
-    def _current_mc_version(self):
-        v = self.versionsList.get()
-        if not v or v.startswith(("Loading", "No ")):
-            return None
-        t = self.download_options.get()
-        if t == "Vanilla":
-            return self.versions_map.get(v, v.replace("release ", "").replace("snapshot ", "").strip())
-        if t == "Forge":
-            return v.split("-", 1)[0]
-        return v
-
-    def open_mods_window(self, context="client", server_name=None):
-        """context=client -> instance (mods/shaders/resource packs);
-        context=server -> the server's plugins or mods folder."""
-        ctx = {"server_mode": context == "server"}
-        if context == "server":
-            if not server_name:
-                return
-            d = self._srv_dir(server_name)
-            meta = self._srv_meta_load(d)
-            soft = meta.get("software", "vanilla")
-            if soft == "vanilla":
-                showerror("Mods", "Vanilla servers do not load plugins or mods.")
-                return
-            ctx.update({
-                "target": d, "software": soft,
-                "mc_ver": meta.get("version") if soft != "velocity" else None,
-                "server_name": server_name,
-                "folder": "plugins" if soft in ("paper", "purpur", "velocity") else "mods",
-            })
-        else:
-            loader = self._loader_id()
-            if not loader:
-                showerror("Mods", "Vanilla cannot load mods.")
-                return
-            ctx.update({"target": self._target_dir(), "loader": loader,
-                        "mc_ver": self._current_mc_version(),
-                        "server_name": self.instance_var.get(),
-                        "folder": "mods"})
-
+    def open_mods_window(self):
+        loader = self._loader_id()
+        if not loader:
+            showerror("Mods", "Vanilla cannot load mods.")
+            return
         if getattr(self, "mods_win", None) is not None and self.mods_win.winfo_exists():
             self.mods_win.lift()
             self.mods_win.focus_force()
             return
-
+        mc_ver = self._current_mc_version()
         L = self
         win = tk.Toplevel(self.window)
         self.mods_win = win
-        self.mods_ctx = ctx
-        self.mods_tab = ctx.get("folder", "mods")
         win.title("Mod Downloader")
         sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-        ww, wh = min(800, sw - 60), min(580, sh - 80)
+        ww, wh = min(780, sw - 60), min(560, sh - 80)
         win.geometry(f"{ww}x{wh}+{(sw - ww) // 2}+{(sh - wh) // 2}")
         win.configure(bg=L.card)
-        win.minsize(700, 500)
+        win.minsize(680, 480)
         try:
             win.iconbitmap("icon.ico")
         except Exception:
@@ -2796,24 +2734,8 @@ class Pycraft:
         head = tk.Frame(win, bg=L.card)
         head.pack(fill="x", padx=14, pady=(10, 2))
         tk.Label(head, text="MOD DOWNLOADER", font=L.f_title, bg=L.card, fg=L.fg).pack(side="left")
-        self.mods_ctx_lbl = tk.Label(head, text="", font=L.f_small, bg=L.card, fg=L.accent)
-        self.mods_ctx_lbl.pack(side="right")
-
-        if ctx["server_mode"]:
-            soft = ctx.get("software")
-            tab_defs = ([("plugins", "PLUGINS")] if soft in ("paper", "purpur", "velocity")
-                        else [("mods", "MODS")])
-        else:
-            tab_defs = [("mods", "MODS"), ("shaders", "SHADERS"), ("resourcepacks", "RESOURCE PACKS")]
-        tabs_row = tk.Frame(win, bg=L.card)
-        tabs_row.pack(fill="x", padx=14, pady=(6, 0))
-        self._mods_tab_labels = {}
-        for key, label in tab_defs:
-            lbl = tk.Label(tabs_row, text=label, font=("Segoe UI", max(8, L._fs(10)), "bold"),
-                           bg=L.card, fg=L.accent if key == self.mods_tab else L.muted, cursor="hand2")
-            lbl.pack(side="left", padx=(0, 16))
-            lbl.bind("<Button-1>", lambda e, k=key: self._mods_set_tab(k))
-            self._mods_tab_labels[key] = lbl
+        tk.Label(head, text=f"{loader}  ·  {mc_ver or '?'}  ·  {L.instance_var.get()}",
+                 font=L.f_small, bg=L.card, fg=L.accent).pack(side="right")
 
         search_row = tk.Frame(win, bg=L.card)
         search_row.pack(fill="x", padx=14, pady=(8, 4))
@@ -2822,28 +2744,24 @@ class Pycraft:
         search_entry.pack(side="left", fill="x", expand=True, ipady=5)
         search_entry.bind("<Return>", lambda e: L._mods_search(win))
         search_b = L._button(search_row, "Search", lambda: L._mods_search(win),
-                             L.accent, L.accent_hover, L.f_small, w=80, h=30, radius=9)
+                             L.accent, L.accent_hover, L.f_small, w=80, h=30, radius=12)
         search_b.pack(side="left", padx=(8, 0))
-        self.mods_cat_var = StringVar(value="")
-        self.mods_cat_cb = ttk.Combobox(search_row, textvariable=self.mods_cat_var,
-                                        values=("",), state="readonly", width=14)
-        self.mods_cat_cb.pack(side="left", padx=(8, 0))
-        self.mods_cat_cb.bind("<<ComboboxSelected>>", lambda e: L._mods_search(win))
 
         body = tk.Frame(win, bg=L.card)
         body.pack(fill="both", expand=True, padx=14, pady=(4, 8))
 
+                       
         left = tk.Frame(body, bg=L.card)
         left.pack(side="left", fill="both", expand=True, padx=(0, 10))
-        tree_wrap = RoundedFrame(left, L.card, L.border, radius=12, surround=L.bg)
+        tree_wrap = RoundedFrame(left, L.card, L.border, radius=16, surround=L.bg)
         tree_wrap.pack(fill="both", expand=True)
         L.mods_tree = ttk.Treeview(tree_wrap, columns=("name", "author", "dl"), show="headings")
-        L.mods_tree.heading("name", text="Name")
+        L.mods_tree.heading("name", text="Mod")
         L.mods_tree.heading("author", text="Author")
         L.mods_tree.heading("dl", text="Downloads")
-        L.mods_tree.column("name", width=280)
+        L.mods_tree.column("name", width=250)
         L.mods_tree.column("author", width=110, anchor="center")
-        L.mods_tree.column("dl", width=100, anchor="center")
+        L.mods_tree.column("dl", width=90, anchor="center")
         t_scroll = ttk.Scrollbar(tree_wrap, orient="vertical", command=L.mods_tree.yview)
         L.mods_tree.configure(yscrollcommand=t_scroll.set)
         t_scroll.pack(side="right", fill="y")
@@ -2853,17 +2771,17 @@ class Pycraft:
         install_row = tk.Frame(left, bg=L.card)
         install_row.pack(fill="x", pady=(8, 0))
         inst_b = L._button(install_row, "INSTALL SELECTED", lambda: L._mods_install(win),
-                           L.green, L.green_hover, L.f_btn, w=180, h=34, radius=10)
+                           L.green, L.green_hover, L.f_btn, w=170, h=32, radius=12)
         inst_b.pack(side="left")
         L.mods_status = tk.Label(install_row, text="", bg=L.card, fg=L.muted, font=L.f_small)
         L.mods_status.pack(side="left", padx=(10, 0))
 
-        right = tk.Frame(body, bg=L.card, width=250)
+                               
+        right = tk.Frame(body, bg=L.card, width=240)
         right.pack(side="right", fill="y")
         right.pack_propagate(False)
-        self.mods_folder_lbl = tk.Label(right, text="", font=L.f_tiny, bg=L.card, fg=L.muted)
-        self.mods_folder_lbl.pack(anchor="w", pady=(0, 4))
-        list_wrap = RoundedFrame(right, L.card, L.border, radius=12, surround=L.bg)
+        tk.Label(right, text="INSTALLED MODS", font=L.f_tiny, bg=L.card, fg=L.muted).pack(anchor="w", pady=(0, 4))
+        list_wrap = RoundedFrame(right, L.card, L.border, radius=16, surround=L.bg)
         list_wrap.pack(fill="both", expand=True)
         L.mods_installed_list = tk.Listbox(
             list_wrap, bg=L.input_bg, fg="white", relief="flat",
@@ -2876,55 +2794,14 @@ class Pycraft:
         L.mods_installed_list.pack(side="left", fill="both", expand=True)
 
         rm_b = L._button(right, "Remove Selected", lambda: L._mods_remove(win),
-                         L.red, L.red_hover, L.f_small, h=30, radius=9)
+                         L.red, L.red_hover, L.f_small, h=30, radius=12)
         rm_b.pack(fill="x", pady=(8, 4))
-        of_b = L._button(right, "Open Folder", lambda: self._mods_open_folder(),
-                         L.gray_btn, L.gray_hover, L.f_small, h=30, radius=9)
+        of_b = L._button(right, "Open Mods Folder", L._open_instance_folder,
+                         L.gray_btn, L.gray_hover, L.f_small, h=30, radius=12)
         of_b.pack(fill="x")
 
-        self._mods_set_tab(self.mods_tab)
-
-    def _mods_active(self):
-        tab = getattr(self, "mods_tab", "mods")
-        ctx = getattr(self, "mods_ctx", {}) or {}
-        if ctx.get("server_mode"):
-            soft = ctx.get("software")
-            if soft in ("paper", "purpur", "velocity"):
-                return {"ptype": "plugin", "loader": soft,
-                        "mc_ver": ctx.get("mc_ver") if soft != "velocity" else None,
-                        "folder": "plugins"}
-            return {"ptype": "mod", "loader": soft, "mc_ver": ctx.get("mc_ver"), "folder": "mods"}
-        if tab == "shaders":
-            return {"ptype": "shader", "loader": None, "mc_ver": ctx.get("mc_ver"), "folder": "shaderpacks"}
-        if tab == "resourcepacks":
-            return {"ptype": "resourcepack", "loader": None, "mc_ver": ctx.get("mc_ver"), "folder": "resourcepacks"}
-        return {"ptype": "mod", "loader": ctx.get("loader"), "mc_ver": ctx.get("mc_ver"), "folder": "mods"}
-
-    def _mods_set_tab(self, key):
-        self.mods_tab = key
-        info = self._mods_active()
-        for k, lbl in self._mods_tab_labels.items():
-            lbl.config(fg=self.accent if k == key else self.muted)
-        cats = {"mod": self._MOD_CATEGORIES, "plugin": self._PLUGIN_CATEGORIES,
-                "shader": self._SHADER_CATEGORIES, "resourcepack": self._PACK_CATEGORIES}.get(info["ptype"], [""])
-        self.mods_cat_cb["values"] = cats
-        self.mods_cat_var.set("")
-        ctx = self.mods_ctx
-        where = ctx.get("server_name")
-        self.mods_ctx_lbl.config(
-            text=f"{info['ptype'].upper()}  \u00b7  {info['loader'] or 'any loader'}  \u00b7  {info['mc_ver'] or 'any version'}  \u00b7  {where}")
-        self.mods_folder_lbl.config(text=f"INSTALLED  \u00b7  {info['folder']}/")
-        self._mods_search(self.mods_win)
-        self._mods_refresh_installed(self.mods_win)
-
-    def _mods_open_folder(self):
-        info = self._mods_active()
-        p = os.path.join(self.mods_ctx["target"], info["folder"])
-        try:
-            os.makedirs(p, exist_ok=True)
-            os.startfile(p)
-        except Exception as e:
-            showerror("Error", str(e))
+        L._set_mods_status(win, "Searching Modrinth...")
+        L._mods_search(win)
 
     def _set_mods_status(self, win, text):
         try:
@@ -2934,64 +2811,29 @@ class Pycraft:
             pass
 
     def _mods_search(self, win):
-        info = self._mods_active()
-        if not info["loader"] and info["ptype"] in ("mod", "plugin"):
+        loader = self._loader_id()
+        mc_ver = self._current_mc_version()
+        if not loader or not mc_ver:
             self._set_mods_status(win, "Select a mod-loadable version first.")
             return
         q = self.mods_search_var.get().strip()
-        cat = self.mods_cat_var.get().strip()
         self._set_mods_status(win, "Searching Modrinth...")
 
-        # search plans: exact -> drop category -> drop version filter
-        parts = []
-        if info["loader"]:
-            parts.append(("loader", "categories:" + info["loader"]))
-        if info["mc_ver"]:
-            parts.append(("version", "versions:" + info["mc_ver"]))
-        parts.append(("ptype", "project_type:" + info["ptype"]))
-        if cat:
-            parts.append(("cat", "categories:" + cat))
-        plans = [parts]
-        if cat:
-            plans.append([p for p in parts if p[0] != "cat"])
-        plans.append([p for p in parts if p[0] not in ("cat", "version")])
-
         def work():
-            hits = []
-            used = None
-            err = None
-            for plan in plans:
-                try:
-                    params = {"facets": json.dumps([[v] for _, v in plan]), "limit": 40}
-                    if q:
-                        params["query"] = q
-                    else:
-                        params["index"] = "downloads"
-                    r = SESSION.get("https://api.modrinth.com/v2/search", params=params,
-                                    timeout=20, headers=self._MODRINTH_UA)
-                    r.raise_for_status()
-                    hits = r.json().get("hits", [])
-                    used = plan
-                    if hits:
-                        break
-                except Exception as e:
-                    err = e
-            relaxed = used is not None and len(used) != len(parts)
-            if err is not None and not hits:
-                status = f"Search failed: {err}"
-            elif not hits:
-                status = "Nothing found on Modrinth for this version yet."
-            elif relaxed:
-                dropped = []
-                have = {k for k, _ in used}
-                if "version" not in have and info["mc_ver"]:
-                    dropped.append("version")
-                if "cat" not in have and cat:
-                    dropped.append("category")
-                status = (f"{len(hits)} results (no exact matches for "
-                          f"{'/'.join(dropped) or 'these filters'} - showing closest)")
-            else:
-                status = f"{len(hits)} found"
+            try:
+                facets = json.dumps([["categories:" + loader], ["versions:" + mc_ver]])
+                params = {"facets": facets, "limit": 40}
+                if q:
+                    params["query"] = q
+                else:
+                    params["index"] = "downloads"
+                r = SESSION.get("https://api.modrinth.com/v2/search", params=params,
+                                timeout=20, headers=self._MODRINTH_UA)
+                r.raise_for_status()
+                hits = r.json().get("hits", [])
+            except Exception as e:
+                self.window.after(0, lambda: self._set_mods_status(win, f"Search failed: {e}"))
+                return
 
             def apply():
                 try:
@@ -3005,7 +2847,7 @@ class Pycraft:
                         dl_s = f"{dl / 1000:.1f}k" if dl >= 1000 else str(dl)
                         tree.insert("", "end", iid=h.get("project_id"),
                                     values=(h.get("title"), h.get("author"), dl_s))
-                    self._set_mods_status(win, status or "Nothing found")
+                    self._set_mods_status(win, f"{len(hits)} mods found" if hits else "No mods found")
                 except Exception:
                     pass
             self.window.after(0, apply)
@@ -3015,42 +2857,38 @@ class Pycraft:
     def _mods_install(self, win):
         sel = self.mods_tree.selection()
         if not sel:
-            self._set_mods_status(win, "Select an item first.")
+            self._set_mods_status(win, "Select a mod first.")
             return
         pid = sel[0]
-        info = self._mods_active()
-        if info["ptype"] in ("mod", "plugin") and not info["loader"]:
+        loader = self._loader_id()
+        mc_ver = self._current_mc_version()
+        if not loader or not mc_ver:
             self._set_mods_status(win, "Select a mod-loadable version first.")
             return
         title = self.mods_tree.item(pid, "values")[0]
-        target_dir = os.path.join(self.mods_ctx["target"], info["folder"])
+        target_mods = os.path.join(self._target_dir(), "mods")
         self._set_mods_status(win, f"Fetching {title}...")
 
         def work():
-            path = None
             try:
-                params = {}
-                if info["loader"]:
-                    params["loaders"] = json.dumps([info["loader"]])
-                if info["mc_ver"]:
-                    params["game_versions"] = json.dumps([info["mc_ver"]])
                 r = SESSION.get(
                     f"https://api.modrinth.com/v2/project/{pid}/version",
-                    params=params, timeout=20, headers=self._MODRINTH_UA
+                    params={"game_versions": json.dumps([mc_ver]), "loaders": json.dumps([loader])},
+                    timeout=20, headers=self._MODRINTH_UA
                 )
                 r.raise_for_status()
                 versions = r.json()
                 if not versions:
-                    raise Exception("No compatible build found")
+                    raise Exception(f"No {loader} build for {mc_ver}")
                 v = versions[0]
                 files = v.get("files") or []
                 if not files:
                     raise Exception("No downloadable file found")
                 f = next((x for x in files if x.get("primary")), files[0])
                 url, fname = f["url"], f["filename"]
-                os.makedirs(target_dir, exist_ok=True)
-                path = os.path.join(target_dir, fname)
-                self._console_write(f"[mods] Downloading {fname} -> {info['folder']}/", "info")
+                os.makedirs(target_mods, exist_ok=True)
+                path = os.path.join(target_mods, fname)
+                self._console_write(f"[mods] Downloading {fname}", "info")
                 with SESSION.get(url, stream=True, timeout=120, headers=self._MODRINTH_UA) as d:
                     d.raise_for_status()
                     total = int(d.headers.get("content-length") or 0)
@@ -3064,7 +2902,7 @@ class Pycraft:
                                     if win.winfo_exists():
                                         self._set_mods_status(win, f"Downloading {n} — {p}%")
                                 self.window.after(0, upd)
-                self._console_write(f"[mods] Installed {fname} into {info['folder']}/", "info")
+                self._console_write(f"[mods] Installed {fname} into '{os.path.basename(os.path.dirname(target_mods))}'", "info")
 
                 def done():
                     if win.winfo_exists():
@@ -3073,8 +2911,7 @@ class Pycraft:
                 self.window.after(0, done)
             except Exception as e:
                 try:
-                    if path:
-                        os.remove(path)
+                    os.remove(path)
                 except Exception:
                     pass
                 self.window.after(0, lambda: self._set_mods_status(win, f"Install failed: {e}"))
@@ -3082,10 +2919,9 @@ class Pycraft:
         Thread(target=work, daemon=True).start()
 
     def _mods_refresh_installed(self, win):
-        info = self._mods_active()
-        folder = os.path.join(self.mods_ctx["target"], info["folder"])
+        mods_dir = os.path.join(self._target_dir(), "mods")
         try:
-            files = sorted(f for f in os.listdir(folder) if f.lower().endswith((".jar", ".zip")))
+            files = sorted(f for f in os.listdir(mods_dir) if f.lower().endswith(".jar"))
         except Exception:
             files = []
         try:
@@ -3102,8 +2938,7 @@ class Pycraft:
         if not sel:
             return
         fname = lb.get(sel[0])
-        info = self._mods_active()
-        p = os.path.join(self.mods_ctx["target"], info["folder"], fname)
+        p = os.path.join(self._target_dir(), "mods", fname)
         try:
             os.remove(p)
             self._console_write(f"[mods] Removed {fname}", "info")
@@ -3111,7 +2946,7 @@ class Pycraft:
         except Exception as e:
             showerror("Error", str(e))
 
-    # ---- saved accounts ----
+                              
     _AUTH_SHORT = {"mojang login": "mojang", "cracked login": "cracked", "ely_by login": "ely.by"}
     _AVATAR_COLORS = ["#4f8cff", "#22c55e", "#f59e0b", "#a78bfa", "#ec4899", "#14b8a6", "#f97316"]
 
@@ -3330,7 +3165,7 @@ class Pycraft:
         raw = data.get("jvm-args")
         if not raw:
             return []
-        # Memory flags come from the RAM slider, ignore them in custom args
+                                                                           
         return [
             p.strip() for p in str(raw).split()
             if p.strip() and not p.startswith("-Xmx") and not p.startswith("-Xms")
@@ -3346,7 +3181,7 @@ class Pycraft:
             base = f"-Xmx{ram_mb}M -Xms128M"
         else:
             base = f"-Xmx{ram_gb}G -Xms128M"
-        # JVM flags for weak PCs
+                                
         if LOW_END or self.light:
             result = f"{base} -XX:+UseG1GC -XX:MaxGCPauseMillis=50"
         elif fps:
@@ -3382,8 +3217,8 @@ class Pycraft:
             return None
 
     def _fix_java_for_version(self, cmd, version_id, game_dir):
-        """Pick the right Java for the version (Mojang runtime if system Java is too old)
-        and strip JVM flags the chosen JVM doesn't support."""
+\
+                                                              
         req_major = None
         component = None
         try:
@@ -3402,15 +3237,15 @@ class Pycraft:
                 pass
             if not exe or not os.path.isfile(exe):
                 try:
-                    self._console_write(f"[spark] Installing Java runtime {component} (Java {req_major}) — this may take a minute...", "info")
-                    cb = {"setStatus": lambda s: self._console_write(f"[spark] {s}", "info")}
+                    self._console_write(f"[Spark-Launcher] Installing Java runtime {component} (Java {req_major}) — this may take a minute...", "info")
+                    cb = {"setStatus": lambda s: self._console_write(f"[Spark-Launcher] {s}", "info")}
                     minecraft_launcher_lib.runtime.install_jvm_runtime(component, game_dir, callback=cb)
                     exe = minecraft_launcher_lib.runtime.get_executable_path(component, game_dir)
                 except Exception as e:
-                    self._console_write(f"[spark] Runtime install failed: {e}", "warn")
+                    self._console_write(f"[Spark-Launcher] Runtime install failed: {e}", "warn")
             if exe and os.path.isfile(exe):
                 cmd[0] = exe
-                self._console_write(f"[spark] Using Mojang runtime '{component}' (Java {req_major})", "info")
+                self._console_write(f"[Spark-Launcher] Using Mojang runtime '{component}' (Java {req_major})", "info")
         chosen_major = sys_major if cmd[0] == "java" else self._java_major_of(cmd[0])
         if chosen_major is not None:
             def supported(flag):
@@ -3434,7 +3269,7 @@ class Pycraft:
         ram_gb = max(1, int(allocated // 1000) if allocated >= 1000 else 1)
 
         try:
-            # Resolve the installed version id for the selected type
+                                                                    
             if runtime_ver == "Vanilla":
                 mc_ver = self.versionsList.get()
                 detected = self.versions_map.get(
@@ -3508,7 +3343,8 @@ class Pycraft:
             cmd = self._fix_java_for_version(cmd, detected, game_dir)
             self._launch_time = time.time()
             self._last_dl_pct = -1
-            self._console_write(f"[spark] Launching {runtime_ver}: {detected}  (instance: {self.instance_var.get()})", "info")
+            self._save_last_selection()
+            self._console_write(f"[Spark-Launcher] Launching {runtime_ver}: {detected}  (instance: {self.instance_var.get()})", "info")
             creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
             proc = subprocess.Popen(
                 cmd, cwd=game_dir,
@@ -3521,7 +3357,7 @@ class Pycraft:
                 self._console_write(line.rstrip("\r\n"))
             code = proc.wait()
             self._mc_proc = None
-            self._console_write(f"[spark] Game exited with code {code}", "info")
+            self._console_write(f"[Spark-Launcher] Game exited with code {code}", "info")
             self.window.after(0, lambda c=code, d=detected: self._after_game_exit(c, d))
 
         except minecraft_launcher_lib.exceptions.VersionNotFound:
@@ -3571,7 +3407,7 @@ class Pycraft:
             return 17
 
     def _check_java(self, min_major):
-        """Returns (ok, found_major). ok=False means java missing or too old."""
+                                                                                
         try:
             r = subprocess.run(["java", "-version"], capture_output=True, text=True, timeout=15)
             out = (r.stderr or "") + (r.stdout or "")
@@ -3746,7 +3582,6 @@ class Pycraft:
             except Exception:
                 pass
 
-
 class SettingsWindow:
     def __init__(self, parent, launcher):
         self.launcher = launcher
@@ -3780,7 +3615,7 @@ class SettingsWindow:
             inner.pack(fill="both", expand=True, padx=12, pady=10)
             return inner
 
-        # Game directory
+                        
         c1 = card("GAME DIRECTORY")
         self.path_var = StringVar(value=self.data.get("Minecraft-home", ""))
         row1 = tk.Frame(c1, bg=L.card)
@@ -3791,7 +3626,7 @@ class SettingsWindow:
         browse_s = L._button(row1, "Browse", self.browse, L.accent, L.accent_hover, ("Segoe UI", 9), w=74, h=28)
         browse_s.pack(side="left", padx=(8, 0))
 
-        # Performance
+                     
         c2 = card("PERFORMANCE")
         self.fps_var = StringVar(value="selected" if self.data.get("Fps-Boost") else "deselected")
         ttk.Checkbutton(
@@ -3820,7 +3655,7 @@ class SettingsWindow:
         )
         self.ram_lbl.pack()
 
-        # JVM arguments
+                       
         c3 = card("JVM ARGUMENTS")
         tk.Label(
             c3, text="Extra flags passed to Java, space separated (e.g. -XX:+UseG1GC)",
@@ -3861,9 +3696,8 @@ class SettingsWindow:
         showinfo("Saved", "Settings saved. Restart for full effect.")
         self.win.destroy()
 
-
 if __name__ == "__main__":
-    # Hide the console prompt window (Windows)
+                                              
     try:
         if os.name == "nt":
             import ctypes
