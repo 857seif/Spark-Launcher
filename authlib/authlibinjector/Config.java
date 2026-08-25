@@ -1,6 +1,4 @@
-/*
- * Decompiled with CFR 0.152.
- */
+
 package moe.yushi.authlibinjector;
 
 import java.net.InetSocketAddress;
