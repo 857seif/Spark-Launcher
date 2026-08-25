@@ -1,6 +1,4 @@
-/*
- * Decompiled with CFR 0.152.
- */
+
 package moe.yushi.authlibinjector.transform.support;
 
 import java.lang.reflect.Array;
