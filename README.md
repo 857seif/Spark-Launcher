@@ -6,5 +6,5 @@
 
 **A feature-packed, lightweight custom Minecraft launcher with built-in server hosting, multi-loader management, offline support, and real-time FPS optimization.**
 
-# if you have drop fream or low fps you can easy dawnload (optimization mods)
+# if you have drop frame or low fps you can easy dawnload (optimization mods)
 from [modrinth](https://modrinth.com/discover/mods?f=categories:optimization)
