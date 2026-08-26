@@ -6,7 +6,11 @@
 
 **A feature-packed, lightweight custom Minecraft launcher with built-in server hosting, multi-loader management, offline support, and real-time FPS optimization.**
 
+<br>
 
+[![Spark Launcher](https://img.shields.io/badge/⚡%20Spark%20Launcher-Website-22c55e?style=for-the-badge&logo=googlechrome&logoColor=white)](https://857seif.github.io/Spark-Launcher/)
+[![Download](https://img.shields.io/badge/Download-Windows-3b82f6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/857seif/Spark-Launcher/releases/download/release/SparkLauncher.exe)
+[![GitHub](https://img.shields.io/badge/Source%20Code-GitHub-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/857seif/Spark-Launcher)
 
 </div>
 
@@ -212,6 +216,10 @@
 <div align="center">
 
 ### ⚡ Spark Launcher — Light as a spark, powerful as lightning.
+
+<br>
+
+[![Spark Launcher](https://img.shields.io/badge/⚡%20Spark%20Launcher-Website-22c55e?style=for-the-badge&logo=googlechrome&logoColor=white)](https://857seif.github.io/Spark-Launcher/)
 
 </div>
 
