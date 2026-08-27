@@ -3,4 +3,3 @@ ttkbootstrap
 requests
 psutil
 Pillow
-

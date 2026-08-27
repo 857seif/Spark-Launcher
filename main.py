@@ -303,134 +303,394 @@ if not os.path.exists(mc_dir):
     except Exception:
         pass
 
-class RoundedFrame(tk.Canvas):
-                                                                    
+class _Design:
+    BG = "#0a0a0a"
+    BG_SECONDARY = "#111111"
+    BG_TERTIARY = "#181818"
+    BG_HOVER = "#1e1e1e"
+    BG_ACTIVE = "#252525"
 
-    def __init__(self, parent, bg, border, radius=14, surround=None, **kw):
+    FG = "#ffffff"
+    FG_SECONDARY = "#a0a0a0"
+    FG_MUTED = "#6a6a6a"
+    FG_DISABLED = "#404040"
+
+    ACCENT = "#f5c842"
+    ACCENT_HOVER = "#ffe066"
+    ACCENT_SOFT = "#3d3618"
+    ACCENT_GLOW = "#f5c842"
+
+    SUCCESS = "#22c55e"
+    SUCCESS_HOVER = "#4ade80"
+    SUCCESS_SOFT = "#143d1e"
+
+    ERROR = "#ef4444"
+    ERROR_HOVER = "#f87171"
+    ERROR_SOFT = "#3d1414"
+
+    WARNING = "#fbbf24"
+    WARNING_HOVER = "#fcd34d"
+    WARNING_SOFT = "#3d3010"
+
+    BORDER = "#2a2a2a"
+    BORDER_LIGHT = "#333333"
+    BORDER_FOCUS = "#f5c842"
+
+    SHADOW_1 = "#000000"
+    SHADOW_2 = "#000000"
+    SHADOW_3 = "#000000"
+
+    RADIUS_SM = 8
+    RADIUS_MD = 12
+    RADIUS_LG = 16
+    RADIUS_XL = 24
+
+    SPACING_XS = 4
+    SPACING_SM = 8
+    SPACING_MD = 16
+    SPACING_LG = 24
+    SPACING_XL = 32
+
+    SIDEBAR_WIDTH = 72
+    SIDEBAR_WIDTH_EXPANDED = 220
+    HEADER_HEIGHT = 48
+
+    @staticmethod
+    def scale(v, sf):
+        return max(1, int(v * sf))
+
+    @staticmethod
+    def brighten(c, f=1.15):
+        c = c.lstrip("#")
         try:
-            s_bg = surround if surround is not None else parent.cget("bg")
-        except Exception:
-            s_bg = bg
-        super().__init__(parent, bg=s_bg, highlightthickness=0, bd=0)
-        self.card_bg = bg
-        self.card_border = border
-        self.radius = radius
-        self.surround = s_bg
-        self.bind("<Configure>", lambda e: self._paint())
+            r, g, b = (int(c[i:i+2], 16) for i in (0,2,4))
+            return f"#{min(255,int(r*f)):02x}{min(255,int(g*f)):02x}{min(255,int(b*f)):02x}"
+        except: return c
+
+    @staticmethod
+    def darken(c, f=0.7):
+        c = c.lstrip("#")
+        try:
+            r, g, b = (int(c[i:i+2], 16) for i in (0,2,4))
+            return f"#{int(r*f):02x}{int(g*f):02x}{int(b*f):02x}"
+        except: return c
+
+    @staticmethod
+    def blend(c1, c2, t):
+        c1, c2 = c1.lstrip("#"), c2.lstrip("#")
+        try:
+            a = [int(c1[i:i+2], 16) for i in (0,2,4)]
+            b = [int(c2[i:i+2], 16) for i in (0,2,4)]
+            return f"#{int(a[0]+(b[0]-a[0])*t):02x}{int(a[1]+(b[1]-a[1])*t):02x}{int(a[2]+(b[2]-a[2])*t):02x}"
+        except: return c2
+
+
+class ModernCard(tk.Frame):
+    def __init__(self, parent, elevated=False, radius=None, **kw):
+        bg = kw.pop("bg", _Design.BG_SECONDARY)
+        super().__init__(parent, bg=bg, **kw)
+        self.elevated = elevated
+        self.radius = radius or _Design.RADIUS_MD
+        self._hover = False
+        self._cv = tk.Canvas(self, bg=bg, highlightthickness=0, bd=0)
+        self._cv.place(x=0, y=0, relwidth=1, relheight=1)
+        self._cv.bind("<Configure>", lambda e: self._paint())
+        self.bind("<Enter>", lambda e: self._set_hover(True))
+        self.bind("<Leave>", lambda e: self._set_hover(False))
         self._paint()
 
-    def _rr(self, x1, y1, x2, y2, r, **kw):
-        r = max(2, min(r, (x2 - x1) // 2, (y2 - y1) // 2))
-        pts = [x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r, x2, y2 - r, x2, y2,
-               x2 - r, y2, x1 + r, y2, x1, y2, x1, y2 - r, x1, y1 + r, x1, y1]
-        return self.create_polygon(pts, smooth=True, **kw)
+    def _set_hover(self, v):
+        self._hover = v
+        self._paint()
+
+    def _rr(self, x1, y1, x2, y2, r, fill="", outline=""):
+        r = max(2, min(r, (x2-x1)//2, (y2-y1)//2))
+        pts = [x1+r, y1, x2-r, y1, x2, y1, x2, y1+r, x2, y2-r, x2, y2,
+               x2-r, y2, x1+r, y2, x1, y2, x1, y2-r, x1, y1+r, x1, y1]
+        return self._cv.create_polygon(pts, smooth=True, fill=fill, outline=outline)
 
     def _paint(self):
-        self.delete("all")
+        c = self._cv
+        c.delete("all")
         w, h = self.winfo_width(), self.winfo_height()
-        if w < 8 or h < 8:
-            self.configure(bg=self.card_bg)
+        if w < 10 or h < 10:
             return
-        self.configure(bg=self.surround)
-        self._rr(1, 1, w - 2, h - 2, self.radius, fill=self.card_bg, outline=self.card_border)
 
-class RoundButton(tk.Canvas):
-                                                                                     
+        bg = self.cget("bg")
+        border = _Design.BORDER_LIGHT if (self._hover or self.elevated) else _Design.BORDER
 
-    def __init__(self, parent, launcher, text, command, bg, hover, fg="#ffffff",
-                 base=10, weight=None, radius=12, surround=None, w=None, h=None):
-        try:
-            s_bg = surround if surround is not None else parent.cget("bg")
-        except Exception:
-            s_bg = launcher.card
-        super().__init__(parent, bg=s_bg, highlightthickness=0, bd=0, cursor="hand2")
-        self.launcher = launcher
+        if self.elevated:
+            for i in range(3, 0, -1):
+                self._rr(i, i+1, w-i, h-i, max(2, self.radius-i), fill=_Design.SHADOW_2, outline="")
+        self._rr(1, 1, w-2, h-2, self.radius, fill=bg, outline=border)
+
+        if self._hover:
+            self._rr(2, 2, w-3, h-3, max(2, self.radius-1), fill="", outline=_Design.ACCENT_SOFT)
+
+
+class ModernButton(tk.Canvas):
+    def __init__(self, parent, text, command, variant="primary", icon="", 
+                 w=None, h=None, radius=None, font_size=11, weight="bold", **kw):
+        variants = {
+            "primary":    (_Design.ACCENT, _Design.ACCENT_HOVER, _Design.BG, "#000000"),
+            "secondary":  (_Design.BG_TERTIARY, _Design.BG_HOVER, _Design.FG, _Design.BORDER),
+            "success":    (_Design.SUCCESS, _Design.SUCCESS_HOVER, _Design.BG, _Design.SUCCESS_SOFT),
+            "danger":     (_Design.ERROR, _Design.ERROR_HOVER, _Design.BG, _Design.ERROR_SOFT),
+            "ghost":      (_Design.BG_SECONDARY, _Design.BG_HOVER, _Design.FG, _Design.BORDER),
+        }
+        bg, hover, fg, border = variants.get(variant, variants["primary"])
+        self.variant = variant
+        self.bg, self.hover_bg, self.fg, self.border_color = bg, hover, fg, border
         self.command = command
-        self.bg = bg
-        self.hover = hover
-        self.fg = fg
-        self.base = base
-        self.weight = weight
-        self.radius = radius
-        self.surround = s_bg
+        self.icon = icon
         self.text = text
-        self._cur = bg
-        if w and h:
-            self.configure(width=w, height=h)
-        else:
-            est_w = int(len(text) * max(7, base) * 0.68) + 30
-            est_h = int(max(7, base) * 1.9) + 12
-            self.configure(width=est_w, height=est_h)
-        self.bind("<Configure>", lambda e: self._paint(self._cur))
-        self.bind("<Enter>", lambda e: self._animate(self.hover))
-        self.bind("<Leave>", lambda e: self._animate(self.bg))
-        self.bind("<ButtonPress-1>", lambda e: self._paint(self._mix(self.hover)))
-        self.bind("<ButtonRelease-1>", self._release)
-        self._cur = bg
+        self.radius = radius or _Design.RADIUS_MD
+        self._cur_bg = bg
         self._anim_job = None
+        self.font_spec = ("Segoe UI", font_size, weight)
+        super().__init__(parent, bg=parent.cget("bg"), highlightthickness=0, bd=0, cursor="hand2")
+        if w and h: self.configure(width=w, height=h)
+        else:
+            _txt = (icon + "  " + text).strip() if icon else text
+            try:
+                _fm = tk.font.Font(family="Segoe UI", size=font_size, weight=weight)
+                tw = _fm.measure(_txt)
+            except Exception:
+                tw = len(_txt) * max(7, font_size) * 0.62
+            self.configure(width=int(tw) + 34, height=38)
+        self.bind("<Configure>", lambda e: self._paint(self._cur_bg))
+        self.bind("<Enter>", lambda e: self._animate(hover))
+        self.bind("<Leave>", lambda e: self._animate(bg))
+        self.bind("<ButtonPress-1>", lambda e: self._paint(_Design.darken(self._cur_bg, 0.85)))
+        self.bind("<ButtonRelease-1>", self._release)
         self._paint(bg)
 
     def _animate(self, target):
         self._anim_target = target
-        if getattr(self, "_anim_job", None):
-            try:
-                self.after_cancel(self._anim_job)
-            except Exception:
-                pass
+        if self._anim_job:
+            try: self.after_cancel(self._anim_job)
+            except: pass
         self._anim_step()
 
     def _anim_step(self):
-        if self._cur == self._anim_target:
+        if self._cur_bg == self._anim_target:
             self._anim_job = None
             return
-        self._paint(self._blend_hex(self._cur, self._anim_target, 0.4))
-        self._anim_job = self.after(24, self._anim_step)
-
-    @staticmethod
-    def _blend_hex(c1, c2, t):
-        c1, c2 = str(c1).lstrip("#"), str(c2).lstrip("#")
-        try:
-            a = [int(c1[i:i + 2], 16) for i in (0, 2, 4)]
-            b = [int(c2[i:i + 2], 16) for i in (0, 2, 4)]
-            return "#{:02x}{:02x}{:02x}".format(*(int(x + (y - x) * t) for x, y in zip(a, b)))
-        except Exception:
-            return c2
-
-    @staticmethod
-    def _mix(color, f=0.8):
-        color = str(color).lstrip("#")
-        try:
-            r, g, b = (int(color[i:i + 2], 16) for i in (0, 2, 4))
-            return "#{:02x}{:02x}{:02x}".format(int(r * f), int(g * f), int(b * f))
-        except Exception:
-            return color
-
-    def _rr(self, x1, y1, x2, y2, r, **kw):
-        r = max(2, min(r, (x2 - x1) // 2, (y2 - y1) // 2))
-        pts = [x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r, x2, y2 - r, x2, y2,
-               x2 - r, y2, x1 + r, y2, x1, y2, x1, y2 - r, x1, y1 + r, x1, y1]
-        return self.create_polygon(pts, smooth=True, **kw)
-
-    def _paint(self, color):
-        self._cur = color
-        self.delete("all")
-        w, h = self.winfo_width(), self.winfo_height()
-        if w < 6 or h < 6:
-            self.configure(bg=self.surround)
-            return
-        self.configure(bg=self.surround)
-        self._rr(1, 1, w - 2, h - 2, self.radius, fill=color, outline="")
-        size = max(7, int(self.base * self.launcher.sf))
-        f = ("Segoe UI", size, self.weight) if self.weight else ("Segoe UI", size)
-        self.create_text(w // 2, h // 2, text=self.text, fill=self.fg, font=f)
+        self._paint(_Design.blend(self._cur_bg, self._anim_target, 0.3))
+        self._anim_job = self.after(16, self._anim_step)
 
     def _release(self, e):
-        self._animate(self.hover)
+        self._animate(self.hover_bg)
+        if self.command:
+            try: self.command()
+            except: pass
+
+    def _rr(self, x1, y1, x2, y2, r, fill="", outline=""):
+        r = max(2, min(r, (x2-x1)//2, (y2-y1)//2))
+        pts = [x1+r, y1, x2-r, y1, x2, y1, x2, y1+r, x2, y2-r, x2, y2,
+               x2-r, y2, x1+r, y2, x1, y2, x1, y2-r, x1, y1+r, x1, y1]
+        return self.create_polygon(pts, smooth=True, fill=fill, outline=outline)
+
+    def _paint(self, color):
+        self._cur_bg = color
+        self.delete("all")
+        w, h = self.winfo_width(), self.winfo_height()
+        if w < 10 or h < 10: return
+        self.configure(bg=self.master.cget("bg"))
+
+        if self.variant != "ghost":
+            for i in range(2, 0, -1):
+                self._rr(i, i+1, w-i, h-i, max(2, self.radius-i), fill=_Design.SHADOW_1, outline="")
+
+        self._rr(1, 1, w-2, h-2, self.radius, fill=color, outline=self.border_color if self.variant=="secondary" else "")
+
+        if self.variant == "primary" and h > 14:
+            self._rr(3, 2, w-3, int(h*0.4), max(2, self.radius-1), fill="", outline=_Design.brighten(color, 1.1))
+
+        txt = (self.icon + "  " + self.text).strip() if self.icon else self.text
+        self.create_text(w//2, h//2+1, text=txt, fill=self.fg, font=self.font_spec)
+
+
+class ModernInput(tk.Entry):
+    def __init__(self, parent, placeholder="", show=None, **kw):
+        super().__init__(parent, bg=_Design.BG_TERTIARY, fg=_Design.FG,
+                         insertbackground=_Design.ACCENT, relief="flat", bd=0,
+                         highlightthickness=1, highlightbackground=_Design.BORDER,
+                         highlightcolor=_Design.BORDER_FOCUS, font=("Segoe UI", 11), **kw)
+        self.placeholder = placeholder
+        self.show_char = show
+        self._has_placeholder = False
+        if placeholder and not self.get():
+            self._show_placeholder()
+        self.bind("<FocusIn>", self._on_focus_in)
+        self.bind("<FocusOut>", self._on_focus_out)
+
+    def _show_placeholder(self):
+        self.config(show="", fg=_Design.FG_MUTED)
+        self.delete(0, tk.END)
+        self.insert(0, self.placeholder)
+        self._has_placeholder = True
+
+    def _clear_placeholder(self):
+        if self._has_placeholder:
+            self.config(show=self.show_char or "", fg=_Design.FG)
+            self.delete(0, tk.END)
+            self._has_placeholder = False
+
+    def _on_focus_in(self, e): self._clear_placeholder()
+    def _on_focus_out(self, e):
+        if not self.get(): self._show_placeholder()
+
+    def get_value(self):
+        return "" if self._has_placeholder else self.get()
+
+
+class ModernSlider(tk.Canvas):
+    def __init__(self, parent, from_, to, variable, command=None, height=8,
+                 bg=_Design.BG_SECONDARY, **kw):
+        super().__init__(parent, height=height + 20, bg=bg, highlightthickness=0, bd=0, **kw)
+        self.from_ = float(from_)
+        self.to = float(to)
+        self.var = variable
+        self.command = command
+        self.track_h = height
+        self.handle_r = max(8, height + 2)
+        self.bind("<Configure>", lambda e: self._draw())
+        self.bind("<Button-1>", self._on_press)
+        self.bind("<B1-Motion>", self._on_press)
+        self._draw()
+
+    def _val(self):
+        try:
+            return float(self.var.get())
+        except Exception:
+            return self.from_
+
+    def _x(self, v):
+        frac = (v - self.from_) / (self.to - self.from_) if self.to != self.from_ else 0.0
+        frac = max(0.0, min(1.0, frac))
+        w = self.winfo_width()
+        pad = self.handle_r + 3
+        return pad + frac * (w - 2 * pad)
+
+    def _val_from_x(self, x):
+        w = self.winfo_width()
+        pad = self.handle_r + 3
+        frac = (x - pad) / (w - 2 * pad) if (w - 2 * pad) > 0 else 0.0
+        frac = max(0.0, min(1.0, frac))
+        return self.from_ + frac * (self.to - self.from_)
+
+    def _draw(self):
+        self.delete("all")
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w < 6:
+            return
+        y = h // 2
+        pad = self.handle_r + 3
+        self.create_line(pad, y, w - pad, y, width=self.track_h,
+                         fill=_Design.BG_TERTIARY, capstyle="round")
+        cx = self._x(self._val())
+        self.create_line(pad, y, cx, y, width=self.track_h,
+                         fill=_Design.ACCENT, capstyle="round")
+        self.create_oval(cx - self.handle_r, y - self.handle_r,
+                         cx + self.handle_r, y + self.handle_r,
+                         fill=_Design.ACCENT, outline=_Design.BG, width=2)
+
+    def _on_press(self, e):
+        v = self._val_from_x(e.x)
+        try:
+            self.var.set(round(v))
+        except Exception:
+            self.var.set(v)
         if self.command:
             try:
-                self.command()
+                self.command(self.var.get())
             except Exception:
-                pass
+                self.command(str(self.var.get()))
+        self._draw()
+
+
+class SidebarItem(tk.Frame):
+    def __init__(self, parent, launcher, icon, label, view_name, **kw):
+        bg = kw.pop("bg", _Design.BG)
+        super().__init__(parent, bg=bg, **kw)
+        self.launcher = launcher
+        self.view_name = view_name
+        self._active = False
+        self._hover = False
+
+        self.canvas = tk.Canvas(self, width=44, height=44, bg=bg, highlightthickness=0, bd=0, cursor="hand2")
+        self.canvas.pack(pady=6)
+        self.canvas.bind("<Button-1>", self._on_click)
+        self.canvas.bind("<Enter>", lambda e: self._set_hover(True))
+        self.canvas.bind("<Leave>", lambda e: self._set_hover(False))
+
+        self.lbl = tk.Label(self, text=label, bg=bg, fg=_Design.FG_MUTED, font=("Segoe UI", 9))
+        self.lbl.pack()
+
+        self.icon = icon
+        self._paint()
+
+    def _set_hover(self, v):
+        self._hover = v
+        self._paint()
+
+    def set_active(self, v):
+        self._active = v
+        self._paint()
+
+    def _paint(self):
+        c = self.canvas
+        c.delete("all")
+        w, h = 44, 44
+        r = 12
+        bg = _Design.BG_HOVER if (self._hover or self._active) else _Design.BG
+        c.configure(bg=bg)
+        c.create_oval(4, 4, w-4, h-4, fill=bg, outline=_Design.ACCENT if self._active else _Design.BORDER)
+        icon = (self.icon or "").replace("\ufe0f", "")
+        c.create_text(w//2, h//2, text=icon, fill=_Design.ACCENT if self._active else (_Design.FG_SECONDARY if not self._hover else _Design.FG), font=("Segoe UI Emoji", 17), anchor="center")
+        self.lbl.config(fg=_Design.ACCENT if self._active else (_Design.FG if self._hover else _Design.FG_MUTED))
+
+    def _on_click(self, e):
+        self.launcher._switch_view(self.view_name)
+
+
+class Sidebar(tk.Frame):
+    def __init__(self, parent, launcher, **kw):
+        super().__init__(parent, bg=_Design.BG, width=_Design.SIDEBAR_WIDTH, **kw)
+        self.launcher = launcher
+        self.pack_propagate(False)
+        self.items = {}
+
+        logo = tk.Label(self, text="⚡", bg=_Design.BG, fg=_Design.ACCENT, font=("Segoe UI", 24), cursor="hand2")
+        logo.pack(pady=(_Design.SPACING_LG, 0))
+        logo.bind("<Button-1>", lambda e: self.launcher._open_launch())
+        logo.bind("<Enter>", lambda e: logo.config(fg=_Design.ACCENT_HOVER))
+        logo.bind("<Leave>", lambda e: logo.config(fg=_Design.ACCENT))
+        tk.Label(self, text="Play", bg=_Design.BG, fg=_Design.FG_SECONDARY, font=("Segoe UI", 8, "bold"), cursor="hand2").pack(pady=(0, _Design.SPACING_MD))
+        self.logo = logo
+
+        for icon, label, view in [
+            ("🏠", "Home", "dashboard"),
+            ("👤", "Accounts", "accounts"),
+            ("🎮", "Game", "game"),
+            ("📦", "Mods", "mods"),
+            ("🖥", "Server", "server"),
+            ("⚙", "Settings", "settings"),
+        ]:
+            item = SidebarItem(self, launcher, icon, label, view)
+            item.pack(fill="x", padx=12, pady=2)
+            self.items[view] = item
+
+        tk.Frame(self, bg=_Design.BORDER, height=1).pack(fill="x", padx=12, pady=_Design.SPACING_MD)
+
+        version_lbl = tk.Label(self, text="v1.0.0", bg=_Design.BG, fg=_Design.FG_DISABLED, font=("Segoe UI", 8))
+        version_lbl.pack(side="bottom", pady=_Design.SPACING_SM)
+
+    def set_active(self, view):
+        for v, item in self.items.items():
+            item.set_active(v == view)
 
 class Pycraft:
     def __init__(self):
@@ -457,44 +717,21 @@ class Pycraft:
         sw = self.window.winfo_screenwidth()
         sh = self.window.winfo_screenheight()
 
-                                                                            
-        margin_x, margin_y = 40, 60
-        max_w = min(1100, sw - margin_x)
-        max_h = min(650, sh - margin_y)
-                                                    
-        self.W = max(720, max_w) if sw >= 800 else max(640, sw - 20)
-        self.H = max(480, max_h) if sh >= 560 else max(420, sh - 40)
+        self.W = min(1200, max(900, sw - 80))
+        self.H = min(750, max(600, sh - 100))
         if sw <= 1280:
             self.W = min(self.W, sw - 20)
             self.H = min(self.H, sh - 40)
-        self.W = min(self.W, sw - 10)
-        self.H = min(self.H, sh - 30)
 
-        self.sx = self.W / 1100.0
-        self.sy = self.H / 650.0
+        self.sx = self.W / 1200.0
+        self.sy = self.H / 750.0
         self.sf = min(self.sx, self.sy)
-
-        self.bg = "#0e1013"
-        self.fg = "#f2f5f9"
-        self.muted = "#8a93a6"
-        self.input_bg = "#12151b"
-        self.border = "#242b38"
-        self.card = "#161b23"
-        self.row_hover = "#202733"
-        self.accent = "#4f8cff"
-        self.accent_hover = "#7aa5ff"
-        self.green = "#22c55e"
-        self.green_hover = "#4ade80"
-        self.red = "#ef4444"
-        self.red_hover = "#f87171"
-        self.gray_btn = "#2b3342"
-        self.gray_hover = "#3a4457"
 
         x = max(0, (sw - self.W) // 2)
         y = max(0, (sh - self.H) // 2)
         self.window.geometry(f"{self.W}x{self.H}+{x}+{y}")
-        self.window.configure(bg=self.bg)
-        self.window.minsize(min(640, self.W), min(420, self.H))
+        self.window.configure(bg=_Design.BG)
+        self.window.minsize(900, 600)
         self.window.resizable(True, True)
 
         self.console_visible = False
@@ -507,7 +744,7 @@ class Pycraft:
         self._mc_proc = None
         self._launch_time = 0.0
         self._last_dl_pct = -1
-        self.active_tab = "client"
+        self.current_view = "dashboard"
         self._keep_hidden = set()
         self._srv_proc = None
         self._srv_players = set()
@@ -516,7 +753,27 @@ class Pycraft:
         self._srv_status = "offline"
         self._fm_path = None
 
-                                                                                       
+        self.green = _Design.SUCCESS
+        self.green_hover = _Design.SUCCESS_HOVER
+        self.red = _Design.ERROR
+        self.red_hover = _Design.ERROR_HOVER
+        self.accent = _Design.ACCENT
+        self.accent_hover = _Design.ACCENT_HOVER
+        self.muted = _Design.FG_MUTED
+        self.fg = _Design.FG
+        self.bg = _Design.BG
+        self.card = _Design.BG_SECONDARY
+        self.border = _Design.BORDER
+        self.input_bg = _Design.BG_TERTIARY
+        self.gray_btn = _Design.BG_TERTIARY
+        self.gray_hover = _Design.BG_HOVER
+        self.f_title = ("Segoe UI", 16, "bold")
+        self.f_large = ("Segoe UI", 13, "bold")
+        self.f_medium = ("Segoe UI", 12)
+        self.f_small = ("Segoe UI", 11)
+        self.f_entry = ("Segoe UI", 11)
+        self.f_tiny = ("Segoe UI", 9)
+
         self.window.overrideredirect(True)
         self._rz_handles = []
         self.window.after(60, self._post_win_setup)
@@ -529,55 +786,58 @@ class Pycraft:
         self.window.mainloop()
 
     def _setup_styles(self):
+        st = ttk.Style()
         if HAS_BOOTSTRAP:
+            try:
+                st.configure("Spark.Horizontal.TProgressbar", background=_Design.ACCENT,
+                             troughcolor=_Design.BG_TERTIARY, bordercolor=_Design.BG_SECONDARY,
+                             lightcolor=_Design.ACCENT, darkcolor=_Design.ACCENT, thickness=12)
+                st.configure("Spark.Horizontal.TScale", troughcolor=_Design.BG_TERTIARY,
+                             background=_Design.BG_SECONDARY, lightcolor=_Design.ACCENT,
+                             darkcolor=_Design.ACCENT)
+            except Exception:
+                pass
             return
         st = ttk.Style()
         try:
             st.theme_use("clam")
         except Exception:
             return
-        st.configure(
-            "TCombobox", fieldbackground=self.input_bg, background=self.gray_btn,
-            foreground="white", arrowcolor="white", bordercolor=self.border,
-            lightcolor=self.card, darkcolor=self.card, insertcolor="white",
-            padding=5
-        )
+        st.configure("TCombobox", fieldbackground=_Design.BG_TERTIARY, background=_Design.BG_SECONDARY,
+                     foreground=_Design.FG, arrowcolor=_Design.ACCENT, bordercolor=_Design.BORDER,
+                     lightcolor=_Design.BG_SECONDARY, darkcolor=_Design.BG_SECONDARY, insertcolor=_Design.ACCENT,
+                     padding=8)
         st.map("TCombobox",
-               fieldbackground=[("readonly", self.input_bg)],
-               foreground=[("readonly", "white")],
-               selectbackground=[("readonly", self.gray_btn)],
-               selectforeground=[("readonly", "white")])
-        st.configure(
-            "TCheckbutton", background=self.card, foreground=self.fg,
-            focuscolor=self.card, bordercolor=self.card, lightcolor=self.card,
-            darkcolor=self.card, arrowcolor="white"
-        )
+               fieldbackground=[("readonly", _Design.BG_TERTIARY)],
+               foreground=[("readonly", _Design.FG)],
+               selectbackground=[("readonly", _Design.ACCENT)],
+               selectforeground=[("readonly", _Design.BG)])
+        st.configure("TCheckbutton", background=_Design.BG_SECONDARY, foreground=_Design.FG,
+                     focuscolor=_Design.BG_SECONDARY, bordercolor=_Design.BG_SECONDARY,
+                     lightcolor=_Design.BG_SECONDARY, darkcolor=_Design.BG_SECONDARY, arrowcolor=_Design.ACCENT)
         st.map("TCheckbutton",
-               background=[("active", self.card)],
-               foreground=[("active", self.fg)])
-        st.configure(
-            "Horizontal.TScale", background=self.card, troughcolor=self.input_bg,
-            bordercolor=self.card, lightcolor=self.accent, darkcolor=self.accent
-        )
-        st.configure(
-            "Horizontal.TProgressbar", background=self.accent, troughcolor=self.input_bg,
-            bordercolor=self.card, lightcolor=self.accent, darkcolor=self.accent,
-            thickness=14
-        )
+               background=[("active", _Design.BG_SECONDARY)],
+               foreground=[("active", _Design.ACCENT)])
+        st.configure("Horizontal.TScale", background=_Design.BG_SECONDARY, troughcolor=_Design.BG_TERTIARY,
+                     bordercolor=_Design.BG_SECONDARY, lightcolor=_Design.ACCENT, darkcolor=_Design.ACCENT)
+        st.configure("Horizontal.TProgressbar", background=_Design.ACCENT, troughcolor=_Design.BG_TERTIARY,
+                      bordercolor=_Design.BG_SECONDARY, lightcolor=_Design.ACCENT, darkcolor=_Design.ACCENT,
+                      thickness=10)
+        st.configure("Spark.Horizontal.TProgressbar", background=_Design.ACCENT, troughcolor=_Design.BG_TERTIARY,
+                      bordercolor=_Design.BG_SECONDARY, lightcolor=_Design.ACCENT, darkcolor=_Design.ACCENT,
+                      thickness=12)
         for sb in ("Vertical.TScrollbar", "Horizontal.TScrollbar"):
-            st.configure(sb, background=self.gray_btn, troughcolor=self.card,
-                         bordercolor=self.card, arrowcolor=self.muted, relief="flat")
-            st.map(sb, background=[("active", self.gray_hover)])
-        st.configure(
-            "Treeview", background=self.card, foreground=self.fg,
-            fieldbackground=self.card, bordercolor=self.border, rowheight=26
-        )
-        st.map("Treeview", background=[("selected", self.accent)], foreground=[("selected", "white")])
-        st.configure("Treeview.Heading", background=self.gray_btn, foreground=self.fg, relief="flat")
-        self.window.option_add("*TCombobox*Listbox.background", self.input_bg)
-        self.window.option_add("*TCombobox*Listbox.foreground", "white")
-        self.window.option_add("*TCombobox*Listbox.selectBackground", self.accent)
-        self.window.option_add("*TCombobox*Listbox.selectForeground", "white")
+            st.configure(sb, background=_Design.BG_SECONDARY, troughcolor=_Design.BG,
+                         bordercolor=_Design.BG, arrowcolor=_Design.ACCENT, relief="flat")
+            st.map(sb, background=[("active", _Design.BG_HOVER)])
+        st.configure("Treeview", background=_Design.BG_SECONDARY, foreground=_Design.FG,
+                     fieldbackground=_Design.BG_SECONDARY, bordercolor=_Design.BORDER, rowheight=28)
+        st.map("Treeview", background=[("selected", _Design.ACCENT)], foreground=[("selected", _Design.BG)])
+        st.configure("Treeview.Heading", background=_Design.BG_TERTIARY, foreground=_Design.FG, relief="flat")
+        self.window.option_add("*TCombobox*Listbox.background", _Design.BG_TERTIARY)
+        self.window.option_add("*TCombobox*Listbox.foreground", _Design.FG)
+        self.window.option_add("*TCombobox*Listbox.selectBackground", _Design.ACCENT)
+        self.window.option_add("*TCombobox*Listbox.selectForeground", _Design.BG)
         self.window.option_add("*TCombobox*Listbox.font", ("Segoe UI", 10))
 
     @staticmethod
@@ -619,7 +879,6 @@ class Pycraft:
 
     def _build_resize_handles(self):
         self._rz_dir = None
-        H = self.header_frame
         specs = [
             ("n", dict(x=0, y=0, relwidth=1, height=5), "sb_v_double_arrow"),
             ("s", dict(x=0, rely=1.0, y=-5, relwidth=1, height=5), "sb_v_double_arrow"),
@@ -631,7 +890,7 @@ class Pycraft:
             ("se", dict(relx=1.0, rely=1.0, x=-12, y=-12, width=12, height=12), "size_nw_se"),
         ]
         for d, place_kw, cur in specs:
-            h = tk.Frame(self.window, bg=self.bg)
+            h = tk.Frame(self.window, bg=_Design.BG)
             h.place(**place_kw)
             h.configure(cursor=cur)
             h.bind("<Button-1>", lambda e, dd=d: self._rz_start(e, dd))
@@ -639,7 +898,6 @@ class Pycraft:
             self._rz_handles.append(h)
         for h in self._rz_handles:
             h.lift()
-        H.lift()
 
     def _rz_start(self, e, d):
         self._rz_dir = d
@@ -707,274 +965,738 @@ class Pycraft:
     def _y(self, v):
         return int(v * self.sy)
 
-    def _update_colmap(self):
-        if self.W < 900:
-            self._colmap = {"col1": 0, "col2": 300, "col3": 300,
-                            "fy": 220, "by": 312, "dly": 368, "sety": 418,
-                            "pw": 202, "brx": 220, "bw": 300}
-        else:
-            self._colmap = {"col1": 0, "col2": 320, "col3": 640,
-                            "fy": 64, "by": 156, "dly": 212, "sety": 262,
-                            "pw": 222, "brx": 240, "bw": 320}
-
-    def _resolve(self, v):
-        return self._colmap[v] if isinstance(v, str) else v
-
-    def _put(self, w, x, y, wd=None, ht=None, font=None):
-                                                                                             
-        self._layout_specs.append([w, x, y, wd, ht])
-        kw = {"x": self._x(self._resolve(x)), "y": self._y(self._resolve(y))}
-        if wd is not None:
-            kw["width"] = self._x(self._resolve(wd))
-        if ht is not None:
-            kw["height"] = self._y(ht)
-        w.place(**kw)
-        if font:
-            base, weight = font
-            if isinstance(w, RoundButton):
-                w.base = base
-                w.weight = weight
-            else:
-                try:
-                    w.config(font=("Segoe UI", self._fs(base), weight) if weight else ("Segoe UI", self._fs(base)))
-                except Exception:
-                    pass
-                self._font_specs.append([w, base, weight])
-
-    def _field_label(self, parent, text, x, y):
-        bar = tk.Frame(parent, bg=self.accent, bd=0)
-        self._put(bar, x, y + 2, 3, 11)
-        lbl = tk.Label(parent, text=text.upper(), bg=self.card, fg=self.muted)
-        self._put(lbl, x + 11, y, font=(8, None))
-
-    def _entry(self, parent, **kw):
-        return Entry(
-            parent, bg=self.input_bg, fg="white", insertbackground="white",
-            relief="flat", highlightthickness=1,
-            highlightbackground=self.border, highlightcolor=self.accent, **kw
-        )
+    def _resolve(self, c):
+        spec = {
+            "col1": 16, "col2": 346, "col3": 676, "col4": 906,
+            "w1": 314, "w2": 314, "w3": 210, "w4": 278,
+        }
+        return spec.get(c, 0)
 
     def _button(self, parent, text, command, bg, hover, font, w=None, h=None, radius=12, **kw):
-        base, weight = 10, None
-        try:
-            base = font[1]
-            if len(font) > 2:
-                weight = font[2]
-        except Exception:
-            pass
-        return RoundButton(parent, self, text, command, bg, hover, "#ffffff",
-                           base=base, weight=weight, radius=radius, w=w, h=h)
+        variant = "secondary"
+        if bg in (self.green, self.green_hover):
+            variant = "success"
+        elif bg in (self.red, self.red_hover):
+            variant = "danger"
+        elif bg in (self.gray_btn, self.gray_hover):
+            variant = "ghost"
+        elif bg in (self.accent, self.accent_hover):
+            variant = "primary"
+        b = ModernButton(parent, text, command, variant, "", w=w, h=h, radius=radius)
+        b.bg, b.hover_bg, b.fg, b.border_color = bg, hover, _Design.FG, _Design.BORDER
+        b.font_spec = font if isinstance(font, tuple) else ("Segoe UI", 11)
+        b._cur_bg = bg
+        b._paint(bg)
+        return b
+
+    def _entry(self, parent, textvariable=None, font=None, placeholder="", show=None, **kw):
+        e = ModernInput(parent, placeholder=placeholder, show=show, **kw)
+        if textvariable is not None:
+            e.config(textvariable=textvariable)
+        if font is not None:
+            e.config(font=font)
+        return e
 
     def _build_ui(self):
-        self._layout_specs = []
-        self._font_specs = []
-        self._update_colmap()
+        self.window.configure(bg=_Design.BG)
 
-        self.canvas = Canvas(self.window, bg=self.bg, bd=0, highlightthickness=0)
-        self._put(self.canvas, 0, 0, 1100, 650)
-        self._draw_background()
+        self.main_container = tk.Frame(self.window, bg=_Design.BG)
+        self.main_container.place(x=0, y=0, relwidth=1, relheight=1)
 
-                                                                            
-                                                            
-        self.overlay = self.window
+        self.sidebar = Sidebar(self.main_container, self)
+        self.sidebar.place(x=0, y=0, width=_Design.SIDEBAR_WIDTH, relheight=1)
 
-                                                                                                
-        self.server_frame = tk.Frame(self.window, bg=self.bg)
-        self._put(self.server_frame, 0, 0, 1100, 650)
-        self._keep_hidden.add(self.server_frame)
-        self.server_frame.place_forget()
-        self._build_server_page()
+        self.content_area = tk.Frame(self.main_container, bg=_Design.BG)
+        self.content_area.place(x=_Design.SIDEBAR_WIDTH, y=0, relwidth=1, relheight=1, width=-_Design.SIDEBAR_WIDTH)
 
-                                                                           
-        self._always_visible = set()
-        self.header_frame = tk.Frame(self.window, bg=self.bg, bd=0, highlightthickness=0)
-        self._put(self.header_frame, 0, 0, 1100, 48)
-        self._always_visible.add(self.header_frame)
-        self._always_visible.add(self.overlay)
+        self.header = tk.Frame(self.content_area, bg=_Design.BG_SECONDARY, height=_Design.HEADER_HEIGHT)
+        self.header.pack(fill="x", side="top")
+        self.header.pack_propagate(False)
 
-                              
-        self._traffic_light(self.header_frame, 14, "#ff5f57", "#ff8a80", "✕", self.window.destroy)
-        self._traffic_light(self.header_frame, 34, "#febc2e", "#ffdd7a", "−", self.window.iconify)
-        self._traffic_light(self.header_frame, 54, "#28c840", "#5ee07a", "⤢", self._toggle_max)
+        self._make_traffic_lights()
 
-        f_label = ("Segoe UI", self._fs(10))
-        f_btn = ("Segoe UI", self._fs(12), "bold")
-        f_small = ("Segoe UI", self._fs(9))
-        self.f_label = f_label
-        self.f_btn = f_btn
-        self.f_small = f_small
-        self.f_entry = ("Segoe UI", self._fs(11))
-        self.f_tiny = ("Segoe UI", max(7, self._fs(8)))
-        self.f_title = ("Segoe UI", self._fs(20), "bold")
+        self.view_container = tk.Frame(self.content_area, bg=_Design.BG)
+        self.view_container.pack(fill="both", expand=True)
 
-                
-        title_lbl = tk.Label(self.header_frame, text="Spark-Launcher", bg=self.bg, fg=self.fg)
-        self._put(title_lbl, 86, 2, font=(16, "bold"))
-        self._always_visible.add(title_lbl)
-        accent_bar = tk.Frame(self.header_frame, bg=self.accent, bd=0)
-        self._put(accent_bar, 88, 30, 36, 3)
-        self._always_visible.add(accent_bar)
-        sub_lbl = tk.Label(self.header_frame, text="MINECRAFT LAUNCHER", bg=self.bg, fg=self.muted)
-        self._put(sub_lbl, 132, 29, font=(7, None))
-        self._always_visible.add(sub_lbl)
-        for w in (self.header_frame, title_lbl, sub_lbl, accent_bar):
-            w.bind("<Button-1>", self._drag_start)
-            w.bind("<B1-Motion>", self._drag_motion)
-        self.header_frame.bind("<Double-Button-1>", lambda e: self._toggle_max())
+        self.status_bar = tk.Frame(self.content_area, bg=_Design.BG_TERTIARY, height=40)
+        self.status_bar.pack(fill="x", side="bottom")
+        self.status_bar.pack_propagate(False)
 
-              
-        self.tab_client = tk.Label(self.header_frame, text="CLIENT", bg=self.bg, fg=self.accent, cursor="hand2")
-        self._put(self.tab_client, 880, 12, font=(11, "bold"))
-        self._always_visible.add(self.tab_client)
-        self.tab_server = tk.Label(self.header_frame, text="SERVER", bg=self.bg, fg=self.muted, cursor="hand2")
-        self._put(self.tab_server, 985, 12, font=(11, "bold"))
-        self._always_visible.add(self.tab_server)
-        self.tab_line_c = tk.Frame(self.header_frame, bg=self.accent, bd=0)
-        self._put(self.tab_line_c, 878, 34, 58, 3)
-        self._always_visible.add(self.tab_line_c)
-        self.tab_line_s = tk.Frame(self.header_frame, bg=self.accent, bd=0)
-        self._put(self.tab_line_s, 983, 34, 62, 3)
-        self.tab_line_s.place_forget()
-        self.tab_client.bind("<Button-1>", lambda e: self._switch_tab("client"))
-        self.tab_server.bind("<Button-1>", lambda e: self._switch_tab("server"))
-
-                                
-        acc_card = RoundedFrame(self.overlay, self.card, self.border, radius=18, surround=self.bg)
-        self._put(acc_card, "col1", 64, 280, 356)
-        self._field_label(acc_card, "Username", 14, 12)
-        self.entry0 = self._entry(acc_card)
-        self.entry0.insert(0, self.username)
-        self._put(self.entry0, 14, 32, 252, 30, font=(11, None))
-        self._field_label(acc_card, "Password", 14, 72)
-        self.entry1 = self._entry(acc_card, show="•")
-        self._put(self.entry1, 14, 92, 252, 30, font=(11, None))
-        self._field_label(acc_card, "Account Type", 14, 132)
-        self.selected_option = StringVar()
-        self.acc_options = ttk.Combobox(
-            acc_card, textvariable=self.selected_option,
-            values=("mojang login", "cracked login", "ely_by login"), state="readonly"
-        )
-        self._put(self.acc_options, 14, 152, 252, font=(10, None))
-        self.acc_options.current(0)
-        self.accounts_count_lbl = tk.Label(acc_card, text="ACCOUNTS", bg=self.card, fg=self.muted)
-        self._put(self.accounts_count_lbl, 14, 190, font=(8, None))
-        self.accounts_frame = tk.Frame(
-            acc_card, bg=self.input_bg, bd=0,
-            highlightthickness=1, highlightbackground=self.border
-        )
-        self._put(self.accounts_frame, 14, 210, 252, 132)
-        self.accounts_canvas = tk.Canvas(self.accounts_frame, bg=self.input_bg, bd=0, highlightthickness=0)
-        acct_scroll = ttk.Scrollbar(self.accounts_frame, orient="vertical", command=self.accounts_canvas.yview)
-        self.accounts_inner = tk.Frame(self.accounts_canvas, bg=self.input_bg)
-        self.accounts_inner.bind(
-            "<Configure>",
-            lambda e: self.accounts_canvas.configure(scrollregion=self.accounts_canvas.bbox("all"))
-        )
-        self.accounts_canvas.create_window((0, 0), window=self.accounts_inner, anchor="nw", width=self._x(236))
-        self.accounts_canvas.configure(yscrollcommand=acct_scroll.set)
-        self.accounts_canvas.pack(side="left", fill="both", expand=True)
-        acct_scroll.pack(side="right", fill="y")
-        self.window.bind_all("<MouseWheel>", self._accounts_mousewheel, add="+")
-        self._refresh_accounts()
-
-                             
-        game_card = RoundedFrame(self.overlay, self.card, self.border, radius=18, surround=self.bg)
-        self._put(game_card, "col2", 64, 300, 226)
-        self._field_label(game_card, "Game Type", 14, 12)
-        self.selected_download = StringVar()
-        self.download_options = ttk.Combobox(
-            game_card, textvariable=self.selected_download,
-            values=("Vanilla", "Forge", "NeoForge", "Fabric", "Quilt"), state="readonly"
-        )
-        self._put(self.download_options, 14, 32, 272, font=(10, None))
-        _last_type = self.data.get("last_game_type") or "Vanilla"
-        _types = ("Vanilla", "Forge", "NeoForge", "Fabric", "Quilt")
-        if _last_type in _types:
-            self.download_options.current(_types.index(_last_type))
-        else:
-            self.download_options.current(0)
-        self.download_options.bind("<<ComboboxSelected>>", self._on_type_change)
-        self._field_label(game_card, "Versions", 14, 72)
-        self.installed_only = StringVar(value="deselected")
-        self.installed_chk = ttk.Checkbutton(
-            game_card, text="Installed only", variable=self.installed_only,
-            onvalue="selected", offvalue="deselected", command=self._load_vanilla_versions
-        )
-        self._put(self.installed_chk, 174, 68, font=(8, None))
-        self.versionsList = ttk.Combobox(game_card, state="readonly")
-        self._put(self.versionsList, 14, 92, 234, font=(10, None))
-        self.versionsList["values"] = ["Loading..."]
-        self.versionsList.current(0)
-        self.versionsList.bind("<<ComboboxSelected>>", self._save_last_selection)
-        addv_b = self._button(game_card, "+", self._add_custom_version, self.gray_btn, self.gray_hover, f_btn, w=34, h=28, radius=12)
-        self._put(addv_b, 252, 92, 34, 28, font=(12, "bold"))
-        self._field_label(game_card, "Instance", 14, 132)
-        self.instance_var = StringVar(value=(self.data.get("selected-instance") or "Default"))
-        self.instance_options = ttk.Combobox(
-            game_card, textvariable=self.instance_var, values=("Default",), state="readonly"
-        )
-        self._put(self.instance_options, 14, 152, 272, font=(10, None))
-        self.instance_options.bind("<<ComboboxSelected>>", self._on_instance_change)
-        new_b = self._button(game_card, "New", self._new_instance, self.green, self.green_hover, f_small)
-        self._put(new_b, 14, 184, 86, 28, font=(9, None))
-        fold_b = self._button(game_card, "Open Folder", self._open_instance_folder, self.accent, self.accent_hover, f_small)
-        self._put(fold_b, 104, 184, 92, 28, font=(9, None))
-        del_b = self._button(game_card, "Delete", self._delete_instance, self.red, self.red_hover, f_small)
-        self._put(del_b, 200, 184, 86, 28, font=(9, None))
-        self._refresh_instances()
-
-                                                         
-        self.mods_btn = self._button(self.overlay, "⬇  MODS", self.open_mods_window, self.gray_btn, self.gray_hover, f_btn, radius=12)
-        self._put(self.mods_btn, "col2", 298, 300, 36, font=(11, "bold"))
-        self.mods_btn.place_forget()
-
-                                 
-        folder_card = RoundedFrame(self.overlay, self.card, self.border, radius=18, surround=self.bg)
-        self._put(folder_card, "col3", "fy", "bw", 76)
-        self._field_label(folder_card, "Minecraft Folder", 14, 10)
-        self.path_var = StringVar(value=self.mc_dir)
-        self.path_entry = self._entry(folder_card, textvariable=self.path_var)
-        self._put(self.path_entry, 14, 32, "pw", 28, font=(9, None))
-        browse_b = self._button(folder_card, "Browse", self.browse_folder, self.accent, self.accent_hover, f_small)
-        self._put(browse_b, "brx", 32, 66, 28, font=(9, None))
-
-        play_b = self._button(self.overlay, "▶   PLAY", self.handle_run, self.green, self.green_hover, f_btn)
-        self._put(play_b, "col3", "by", "bw", 48, font=(12, "bold"))
-        dl_b = self._button(self.overlay, "⬇   DOWNLOAD", self.handle_download, self.accent, self.accent_hover, f_btn)
-        self._put(dl_b, "col3", "dly", "bw", 42, font=(12, "bold"))
-        set_b = self._button(self.overlay, "⚙   SETTINGS", self.open_settings, self.gray_btn, self.gray_hover, f_label)
-        self._put(set_b, "col3", "sety", "bw", 36, font=(10, None))
-
-                              
-        sep = tk.Frame(self.overlay, bg=self.border, bd=0)
-        self._put(sep, 0, 584, 1068, 2)
-        self.status_dot = tk.Label(self.overlay, text="●", bg=self.bg, fg=self.green)
-        self._put(self.status_dot, 0, 592, font=(9, None))
-        self.status_lbl = tk.Label(self.overlay, text="Ready", bg=self.bg, fg=self.muted)
-        self._put(self.status_lbl, 16, 592, font=(9, None))
-        self.console_btn = tk.Label(self.overlay, text="⌨  Console", bg=self.bg, fg=self.muted, cursor="hand2")
-        self._put(self.console_btn, 170, 592, font=(9, None))
+        self.status_dot = tk.Label(self.status_bar, text="●", bg=_Design.BG_TERTIARY, fg=_Design.SUCCESS, font=("Segoe UI", 10))
+        self.status_dot.pack(side="left", padx=(_Design.SPACING_MD, _Design.SPACING_SM))
+        self.status_lbl = tk.Label(self.status_bar, text="Ready", bg=_Design.BG_TERTIARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 10))
+        self.status_lbl.pack(side="left")
+        self.console_btn = tk.Label(self.status_bar, text="⌨ Console", bg=_Design.BG_TERTIARY, fg=_Design.FG_SECONDARY, cursor="hand2", font=("Segoe UI", 10))
+        self.console_btn.pack(side="right", padx=_Design.SPACING_MD)
         self.console_btn.bind("<Button-1>", lambda e: self._toggle_console())
-        self.console_btn.bind("<Enter>", lambda e: self.console_btn.config(fg=self.accent))
-        self.console_btn.bind("<Leave>", lambda e: self.console_btn.config(fg=self.accent if self.console_visible else self.muted))
-        self.instance_chip = tk.Label(self.overlay, text="◈  Default", bg=self.bg, fg=self.muted)
-        self._put(self.instance_chip, 290, 592, font=(9, None))
+        self.console_btn.bind("<Enter>", lambda e: self.console_btn.config(fg=_Design.ACCENT))
+        self.console_btn.bind("<Leave>", lambda e: self.console_btn.config(fg=_Design.FG_SECONDARY))
+        self.instance_chip = tk.Label(self.status_bar, text="◈  Default", bg=_Design.BG_TERTIARY, fg=_Design.FG_MUTED, font=("Segoe UI", 10))
+        self.instance_chip.pack(side="right", padx=_Design.SPACING_LG)
 
-                                                                          
-        self.progress_bar = ttk.Progressbar(self.overlay, mode="determinate", maximum=100)
-        self._put(self.progress_bar, 320, 588, 640, 16)
-        self.progress_lbl = tk.Label(self.overlay, text="", bg=self.bg, fg=self.muted)
-        self._put(self.progress_lbl, 968, 588, 100, 16, font=(9, None))
+        self.progress_bar = ttk.Progressbar(self.status_bar, mode="determinate", maximum=100,
+                                            style="Spark.Horizontal.TProgressbar")
+        self.progress_lbl = tk.Label(self.status_bar, text="", bg=_Design.BG_TERTIARY, fg=_Design.ACCENT, font=("Segoe UI", 9))
         self.progress_bar.place_forget()
         self.progress_lbl.place_forget()
-        self._keep_hidden.update({self.progress_bar, self.progress_lbl, self.mods_btn})
+
+        self.views = {}
+        self._create_views()
+        self._switch_view("dashboard")
 
         self._build_console()
-        self.window.bind("<Configure>", self._on_window_resize)
-        self._on_type_change()
+        self.window.after(150, self._console_pump)
+        self.window.after(300, self._srv_pump)
+        self.window.after(12000, self._slideshow_tick)
+
+    def _make_traffic_lights(self):
+        dots = [
+            ("–", _Design.ACCENT, _Design.ACCENT_HOVER, self.window.iconify),
+            ("⤢", _Design.SUCCESS, _Design.SUCCESS_HOVER, self._toggle_max),
+            ("✕", "#ff5f57", "#ff8a80", self.window.destroy),
+        ]
+        n = len(dots)
+        for i, (glyph, color, hover, cmd) in enumerate(dots):
+            c = tk.Canvas(self.header, width=16, height=16, bg=_Design.BG_SECONDARY, highlightthickness=0, cursor="hand2")
+            offset = 14 + (n - 1 - i) * 24
+            c.place(relx=1.0, x=-offset, y=16, anchor="ne")
+            dot = c.create_oval(2, 2, 14, 14, fill=color, outline="")
+            g = c.create_text(8, 8, text=glyph, fill="#1a1a1a", font=("Segoe UI", 9, "bold"), state="normal")
+            c.bind("<Button-1>", lambda e, cc=cmd: cc())
+            c.bind("<Enter>", lambda e, c=c, h=hover: c.itemconfig(dot, fill=h))
+            c.bind("<Leave>", lambda e, c=c, col=color: c.itemconfig(dot, fill=col))
+
+    def _create_views(self):
+        for name in ("dashboard", "accounts", "game", "mods", "server", "settings", "launch"):
+            frame = tk.Frame(self.view_container, bg=_Design.BG)
+            frame.place(x=0, y=0, relwidth=1, relheight=1)
+            frame.place_forget()
+            self.views[name] = frame
+
+        self._build_dashboard_view()
+        self._build_accounts_view()
+        self._build_game_view()
+        self._build_mods_view()
+        self._build_server_view()
+        self._build_settings_view()
+        self._build_launch_view()
+
+    def _switch_view(self, name):
+        if name == self.current_view:
+            return
+        if self.current_view in self.views:
+            self.views[self.current_view].place_forget()
+        self.current_view = name
+        self.views[name].place(x=0, y=0, relwidth=1, relheight=1)
+        self.sidebar.set_active(name)
+        if hasattr(self, f"_on_view_{name}"):
+            getattr(self, f"_on_view_{name}")()
+
+    def _open_launch(self):
+        self._switch_view("launch")
+
+    def _skins_dir(self):
+        d = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skins")
+        try:
+            os.makedirs(d, exist_ok=True)
+        except Exception:
+            pass
+        return d
+
+    def _list_skins(self):
+        d = self._skins_dir()
+        out = []
+        try:
+            for f in os.listdir(d):
+                if f.lower().endswith((".png", ".gif")):
+                    out.append(f)
+        except Exception:
+            pass
+        return sorted(out, key=str.lower)
+
+    def _build_launch_view(self):
+        v = self.views["launch"]
+        scroll = tk.Canvas(v, bg=_Design.BG, highlightthickness=0, bd=0)
+        scroll.pack(fill="both", expand=True, padx=_Design.SPACING_LG, pady=_Design.SPACING_LG)
+        inner = tk.Frame(scroll, bg=_Design.BG)
+        scroll.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: scroll.configure(scrollregion=scroll.bbox("all")))
+        scroll.bind_all("<MouseWheel>", lambda e: scroll.yview_scroll(-1 * (e.delta // 120), "units"), add="+")
+
+        header = tk.Frame(inner, bg=_Design.BG)
+        header.pack(fill="x", pady=(0, _Design.SPACING_LG))
+        tk.Label(header, text="Play", bg=_Design.BG, fg=_Design.FG, font=("Segoe UI", 24, "bold")).pack(anchor="w")
+        tk.Label(header, text="Pick your version, instance, account and skin — then play.", bg=_Design.BG, fg=_Design.FG_SECONDARY, font=("Segoe UI", 11)).pack(anchor="w", pady=(4, 0))
+
+        cols = tk.Frame(inner, bg=_Design.BG)
+        cols.pack(fill="both", expand=True)
+        cols.columnconfigure(0, weight=1)
+        cols.columnconfigure(1, weight=1)
+
+        left = ModernCard(cols, elevated=True)
+        left.grid(row=0, column=0, padx=(0, _Design.SPACING_SM), sticky="nsew", pady=_Design.SPACING_SM)
+        self._build_launch_preview(left)
+
+        right = tk.Frame(cols, bg=_Design.BG)
+        right.grid(row=0, column=1, padx=(_Design.SPACING_SM, 0), sticky="nsew", pady=_Design.SPACING_SM)
+        self._build_launch_selectors(right)
+
+        play_bar = tk.Frame(inner, bg=_Design.BG)
+        play_bar.pack(fill="x", pady=_Design.SPACING_LG)
+        ModernButton(play_bar, "Play", self._launch_play, "success", "▶", w=260, h=52, font_size=14).pack(side="right")
+        ModernButton(play_bar, "Game Setup", lambda: self._switch_view("game"), "ghost", "⚙", w=160, h=52).pack(side="right", padx=(0, _Design.SPACING_SM))
+
+        # hidden holders used by run_mc (kept in sync from the launch screen)
+        if not getattr(self, "acc_options", None):
+            self.acc_options = ttk.Combobox(self.window, values=("cracked login", "ely_by login"), state="readonly")
+        if not getattr(self, "entry0", None):
+            self.entry0 = ttk.Entry(self.window)
+        self.acc_options.set("cracked login")
+
+        # restore last selections
+        data = self.data or {}
+        saved = load_settings()
+        self.play_gtype.set(saved.get("last_game_type") or data.get("last_game_type") or "Vanilla")
+        self.play_instance.set(saved.get("selected-instance") or "Default")
+        self.play_skin.set(saved.get("selected_skin") or "Default")
+        self.play_skin_path = os.path.join(self._skins_dir(), self.play_skin.get()) if self.play_skin.get() not in ("", "Default") else None
+        sel_acc = saved.get("selected_account") or self.username
+        self.play_account.set(sel_acc or "")
+        accs = self._accounts()
+        if sel_acc:
+            a = next((x for x in accs if x.get("username") == sel_acc), None)
+            if a:
+                self.play_acc_type.set(a.get("AUTH_TYPE") or "cracked login")
+                self.play_username.set(a.get("username") or "")
+            else:
+                self.play_acc_type.set("cracked login")
+                self.play_username.set(sel_acc)
+        else:
+            self.play_acc_type.set("cracked login")
+            self.play_username.set("")
+        self._launch_refresh_preview()
+        self._launch_load_versions(self.play_gtype.get())
+        self._launch_fill_instances()
+        self._launch_fill_accounts()
+        self._launch_fill_skins()
+
+    def _build_launch_preview(self, card):
+        card.config(bg=_Design.BG_SECONDARY)
+        body = tk.Frame(card, bg=_Design.BG_SECONDARY)
+        body.pack(fill="both", expand=True, padx=_Design.SPACING_LG, pady=_Design.SPACING_LG)
+        tk.Label(body, text="READY TO PLAY", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(0, _Design.SPACING_SM))
+        self.launch_avatar = tk.Canvas(body, width=150, height=150, bg=_Design.BG_SECONDARY, highlightthickness=0, bd=0)
+        self.launch_avatar.pack(pady=(_Design.SPACING_MD, _Design.SPACING_LG))
+        self.launch_prev_ver = tk.Label(body, text="—", bg=_Design.BG_SECONDARY, fg=_Design.FG, font=("Segoe UI", 13, "bold"))
+        self.launch_prev_ver.pack()
+        self.launch_prev_inst = tk.Label(body, text="Instance: —", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 10))
+        self.launch_prev_inst.pack(pady=(2, 0))
+        self.launch_prev_acc = tk.Label(body, text="Account: —", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 10))
+        self.launch_prev_acc.pack(pady=(2, 0))
+        self.launch_prev_skin = tk.Label(body, text="Skin: Default", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 10))
+        self.launch_prev_skin.pack(pady=(2, 0))
+
+    def _launch_draw_avatar(self):
+        cv = self.launch_avatar
+        cv.delete("all")
+        name = self.play_username.get().strip() or "?"
+        skin = self.play_skin_path
+        if skin and os.path.isfile(skin):
+            try:
+                if not hasattr(self, "_launch_skin_img") or self._launch_skin_img_name != skin:
+                    self._launch_skin_img = tk.PhotoImage(file=skin)
+                    self._launch_skin_img_name = skin
+                img = self._launch_skin_img
+                cv.create_image(75, 75, image=img)
+                return
+            except Exception:
+                pass
+        color = self._AVATAR_COLORS[sum(map(ord, name)) % len(self._AVATAR_COLORS)]
+        cv.create_oval(15, 15, 135, 135, fill=color, outline="")
+        cv.create_text(75, 75, text=name[:1].upper(), fill="white", font=("Segoe UI", 54, "bold"))
+
+    def _launch_refresh_preview(self):
+        try:
+            self.launch_prev_ver.config(text=f"{self.play_gtype.get()}  ·  {self.play_version.get() or '—'}")
+            self.launch_prev_inst.config(text=f"Instance: {self.play_instance.get() or 'Default'}")
+            self.launch_prev_acc.config(text=f"Account: {self.play_username.get().strip() or '—'}")
+            self.launch_prev_skin.config(text=f"Skin: {self.play_skin.get() or 'Default'}")
+            self._launch_draw_avatar()
+        except Exception:
+            pass
+
+    def _build_launch_selectors(self, parent):
+        # type + version
+        vt_card = ModernCard(parent, elevated=True)
+        vt_card.pack(fill="x", pady=_Design.SPACING_SM)
+        tk.Label(vt_card, text="Version", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        self.play_gtype = StringVar()
+        gtype = ttk.Combobox(vt_card, textvariable=self.play_gtype, values=("Vanilla", "Forge", "NeoForge", "Fabric", "Quilt"), state="readonly", font=("Segoe UI", 11))
+        gtype.pack(fill="x", padx=_Design.SPACING_MD, pady=(_Design.SPACING_SM, 0))
+        gtype.bind("<<ComboboxSelected>>", lambda e: (self._launch_load_versions(self.play_gtype.get()), self._launch_refresh_preview()))
+        self.play_version = ttk.Combobox(vt_card, state="readonly", font=("Segoe UI", 11))
+        self.play_version.pack(fill="x", padx=_Design.SPACING_MD, pady=_Design.SPACING_MD)
+        self.play_version.bind("<<ComboboxSelected>>", lambda e: self._launch_refresh_preview())
+
+        # instance
+        inst_card = ModernCard(parent, elevated=True)
+        inst_card.pack(fill="x", pady=_Design.SPACING_SM)
+        tk.Label(inst_card, text="Instance", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        inst_row = tk.Frame(inst_card, bg=_Design.BG_SECONDARY)
+        inst_row.pack(fill="x", padx=_Design.SPACING_MD, pady=_Design.SPACING_MD)
+        self.play_instance = StringVar()
+        self.play_instance_cb = ttk.Combobox(inst_row, textvariable=self.play_instance, state="readonly", font=("Segoe UI", 11))
+        self.play_instance_cb.pack(side="left", fill="x", expand=True, padx=(0, _Design.SPACING_SM))
+        self.play_instance_cb.bind("<<ComboboxSelected>>", lambda e: self._launch_refresh_preview())
+        ModernButton(inst_row, "New", self._new_instance, "secondary", "+", w=80).pack(side="left")
+
+        # account
+        acc_card = ModernCard(parent, elevated=True)
+        acc_card.pack(fill="x", pady=_Design.SPACING_SM)
+        tk.Label(acc_card, text="Account", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        self.play_account = StringVar()
+        acc_pick = ttk.Combobox(acc_card, textvariable=self.play_account, state="readonly", font=("Segoe UI", 11))
+        acc_pick.pack(fill="x", padx=_Design.SPACING_MD, pady=(_Design.SPACING_SM, 0))
+        acc_pick.bind("<<ComboboxSelected>>", self._launch_on_account_pick)
+        self._launch_account_combo = acc_pick
+        acc_row = tk.Frame(acc_card, bg=_Design.BG_SECONDARY)
+        acc_row.pack(fill="x", padx=_Design.SPACING_MD, pady=(_Design.SPACING_SM, 0))
+        self.play_acc_type = StringVar()
+        at = ttk.Combobox(acc_row, textvariable=self.play_acc_type, values=("cracked login", "ely_by login"), state="readonly", font=("Segoe UI", 10), width=14)
+        at.pack(side="left", fill="x", expand=True, padx=(0, _Design.SPACING_SM))
+        at.bind("<<ComboboxSelected>>", lambda e: self._launch_refresh_preview())
+        self.play_username = StringVar()
+        ModernInput(acc_row, textvariable=self.play_username, placeholder="Username").pack(side="left", fill="x", expand=True, padx=(0, _Design.SPACING_SM))
+        self.play_username.trace_add("write", lambda *a: self._launch_refresh_preview())
+        ModernButton(acc_card, "Add / Manage", lambda: self._switch_view("accounts"), "ghost", "👤", w=160).pack(anchor="e", padx=_Design.SPACING_MD, pady=(0, _Design.SPACING_MD))
+
+        # skin
+        skin_card = ModernCard(parent, elevated=True)
+        skin_card.pack(fill="x", pady=_Design.SPACING_SM)
+        tk.Label(skin_card, text="Skin", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        self.play_skin = StringVar()
+        self.launch_skin_row = tk.Frame(skin_card, bg=_Design.BG_SECONDARY)
+        self.launch_skin_row.pack(fill="x", padx=_Design.SPACING_MD, pady=_Design.SPACING_MD)
+        ModernButton(skin_card, "Import Skin…", self._launch_import_skin, "secondary", "📁", w=160).pack(anchor="e", padx=_Design.SPACING_MD, pady=(0, _Design.SPACING_MD))
+
+    def _launch_on_account_pick(self, event=None):
+        uname = self.play_account.get()
+        if not uname:
+            return
+        a = next((x for x in self._accounts() if x.get("username") == uname), None)
+        if a:
+            self.play_acc_type.set(a.get("AUTH_TYPE") or "cracked login")
+            self.play_username.set(a.get("username") or "")
+        self._launch_refresh_preview()
+
+    def _launch_fill_instances(self):
+        vals = ["Default"] + self._list_instances()
+        self.play_instance_cb["values"] = vals
+        if self.play_instance.get() not in vals:
+            self.play_instance.set("Default")
+        try:
+            self.play_instance_cb.current(vals.index(self.play_instance.get()))
+        except Exception:
+            pass
+
+    def _launch_fill_accounts(self):
+        vals = [a.get("username") for a in self._accounts()]
+        self._launch_account_combo["values"] = vals
+
+    def _launch_fill_skins(self):
+        for w in self.launch_skin_row.winfo_children():
+            w.destroy()
+        skins = ["Default"] + self._list_skins()
+        self._launch_skin_imgs = []
+        for s in skins:
+            name = s
+            btn = ModernButton(self.launch_skin_row, name if s == "Default" else s, lambda sv=s: self._launch_select_skin(sv), "ghost", "", w=92, h=34, font_size=9)
+            btn.pack(side="left", padx=(0, _Design.SPACING_SM), pady=2)
+            if s == self.play_skin.get():
+                try:
+                    btn._set_hover(True)
+                except Exception:
+                    pass
+
+    def _launch_select_skin(self, name):
+        self.play_skin.set(name)
+        self.play_skin_path = os.path.join(self._skins_dir(), name) if name not in ("", "Default") else None
+        self._launch_refresh_preview()
+        self._launch_fill_skins()
+
+    def _launch_import_skin(self):
+        f = filedialog.askopenfilename(title="Select skin image", filetypes=[("Images", "*.png *.gif")])
+        if not f:
+            return
+        dest = os.path.join(self._skins_dir(), os.path.basename(f))
+        try:
+            shutil.copy(f, dest)
+        except Exception as e:
+            showerror("Error", str(e))
+            return
+        self.play_skin.set(os.path.basename(dest))
+        self.play_skin_path = dest
+        self._launch_fill_skins()
+        self._launch_refresh_preview()
+
+    def _launch_load_versions(self, gtype):
+        cb = self.play_version
+
+        def work():
+            target = self._target_dir()
+            versions, vmap = [], {}
+            try:
+                if gtype == "Vanilla":
+                    try:
+                        available = minecraft_launcher_lib.utils.get_available_versions(target)
+                    except Exception:
+                        available = [{"type": "release", "id": "1.20.1"}]
+                    installed_ids = set()
+                    try:
+                        vdir = os.path.join(target, "versions")
+                        installed_ids = {n for n in os.listdir(vdir) if os.path.isfile(os.path.join(vdir, n, n + ".json"))}
+                    except Exception:
+                        installed_ids = set()
+                    for i in available:
+                        label = f'{i["type"]} {i["id"]}'
+                        versions.append(label)
+                        vmap[label] = i["id"]
+                    for vid in sorted(installed_ids - set(vmap.values())):
+                        label = f"custom {vid}"
+                        versions.append(label)
+                        vmap[label] = vid
+                elif gtype == "Forge":
+                    try:
+                        versions = sorted(minecraft_launcher_lib.forge.list_forge_versions(), key=self._version_sort_key, reverse=True)
+                    except Exception:
+                        versions = []
+                elif gtype == "Fabric":
+                    try:
+                        versions = sorted(get_stable_minecraft_versions(), key=self._version_sort_key, reverse=True)
+                    except Exception:
+                        versions = []
+                elif gtype == "NeoForge":
+                    try:
+                        nf = mod_loader.Neoforge()
+                        versions = sorted(nf.get_minecraft_versions(True), key=self._version_sort_key, reverse=True)
+                    except Exception:
+                        versions = []
+                elif gtype == "Quilt":
+                    try:
+                        versions = sorted(quilt.get_stable_minecraft_versions(), key=self._version_sort_key, reverse=True)
+                    except Exception:
+                        versions = []
+            except Exception:
+                versions, vmap = [], {}
+            self.window.after(0, lambda: self._launch_apply_versions(versions, vmap))
+
+        Thread(target=work, daemon=True).start()
+
+    def _launch_apply_versions(self, versions, vmap):
+        self.play_versions_map = vmap
+        self.play_version["values"] = versions or ["No versions found"]
+        if versions:
+            last = (self.data or {}).get("last_version") or load_settings().get("last_version")
+            if last and last in list(versions):
+                try:
+                    self.play_version.current(list(versions).index(last))
+                    self._launch_refresh_preview()
+                    return
+                except Exception:
+                    pass
+            self.play_version.current(0)
+        else:
+            self.play_version.set("No versions found")
+        self._launch_refresh_preview()
+
+    def _launch_play(self):
+        gtype = self.play_gtype.get()
+        ver = self.play_version.get()
+        inst = self.play_instance.get() or "Default"
+        acc_type = self.play_acc_type.get() or "cracked login"
+        user = self.play_username.get().strip()
+
+        if not user:
+            showerror("Account required", "Enter a username (or pick a saved account) before playing.")
+            return
+        if not ver or ver in ("No versions found", "No downloaded versions"):
+            showerror("Version required", "Select a version. Download it from the Game tab if it isn't installed yet.")
+            return
+
+        self.download_options.set(gtype)
+        self.versionsList.set(ver)
+        self.versions_map = getattr(self, "play_versions_map", {})
+        self.instance_var.set(inst)
+        self.acc_options.set(acc_type)
+        self.entry0.delete(0, "end")
+        self.entry0.insert(0, user)
+
+        data = load_settings()
+        data["last_game_type"] = gtype
+        data["last_version"] = ver
+        data["selected-instance"] = inst
+        data["selected_account"] = user
+        if self.play_skin_path:
+            data["selected_skin"] = os.path.basename(self.play_skin_path)
+        save_settings(data)
+        self.data = data
+        self.handle_run()
+
+    def _on_view_dashboard(self):
+        self._refresh_dashboard_stats()
+
+    def _on_view_launch(self):
+        try:
+            self._launch_fill_instances()
+            self._launch_fill_accounts()
+            self._launch_fill_skins()
+            self._launch_load_versions(self.play_gtype.get())
+        except Exception:
+            pass
+
+    def _on_view_accounts(self):
+        self._refresh_accounts()
+
+    def _build_dashboard_view(self):
+        v = self.views["dashboard"]
+        scroll = tk.Canvas(v, bg=_Design.BG, highlightthickness=0, bd=0)
+        scroll.pack(fill="both", expand=True, padx=_Design.SPACING_LG, pady=_Design.SPACING_LG)
+        inner = tk.Frame(scroll, bg=_Design.BG)
+        scroll.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: scroll.configure(scrollregion=scroll.bbox("all")))
+        scroll.bind_all("<MouseWheel>", lambda e: scroll.yview_scroll(-1*(e.delta//120), "units"), add="+")
+
+        header = tk.Frame(inner, bg=_Design.BG)
+        header.pack(fill="x", pady=(0, _Design.SPACING_LG))
+        tk.Label(header, text="Dashboard", bg=_Design.BG, fg=_Design.FG, font=("Segoe UI", 24, "bold")).pack(anchor="w")
+        tk.Label(header, text="Welcome back! Here's your Minecraft overview.", bg=_Design.BG, fg=_Design.FG_SECONDARY, font=("Segoe UI", 11)).pack(anchor="w", pady=(4, 0))
+
+        stats_grid = tk.Frame(inner, bg=_Design.BG)
+        stats_grid.pack(fill="x", pady=_Design.SPACING_MD)
+        for i in range(4): stats_grid.columnconfigure(i, weight=1)
+
+        self.stat_cards = {}
+        stats = [
+            ("🎮", "Installed Versions", "0", "versions"),
+            ("👤", "Saved Accounts", "0", "accounts"),
+            ("📦", "Installed Mods", "0", "mods"),
+            ("🖥", "Servers", "0", "servers"),
+        ]
+        for i, (icon, label, value, key) in enumerate(stats):
+            card = ModernCard(stats_grid, elevated=True, radius=_Design.RADIUS_LG)
+            card.grid(row=0, column=i, padx=_Design.SPACING_SM, pady=_Design.SPACING_SM, sticky="nsew")
+            tk.Label(card, text=icon, bg=_Design.BG_SECONDARY, fg=_Design.ACCENT, font=("Segoe UI", 20)).pack(pady=(_Design.SPACING_MD, 0))
+            val_lbl = tk.Label(card, text=value, bg=_Design.BG_SECONDARY, fg=_Design.FG, font=("Segoe UI", 28, "bold"))
+            val_lbl.pack()
+            tk.Label(card, text=label, bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 10)).pack(pady=(0, _Design.SPACING_MD))
+            self.stat_cards[key] = val_lbl
+
+        actions = tk.Frame(inner, bg=_Design.BG)
+        actions.pack(fill="x", pady=_Design.SPACING_LG)
+        tk.Label(actions, text="Quick Actions", bg=_Design.BG, fg=_Design.FG, font=("Segoe UI", 14, "bold")).pack(anchor="w", pady=(0, _Design.SPACING_MD))
+        btn_row = tk.Frame(actions, bg=_Design.BG)
+        btn_row.pack(fill="x")
+        ModernButton(btn_row, "Launch Game", lambda: self._switch_view("game"), "success", "▶", w=180).pack(side="left", padx=(0, _Design.SPACING_SM))
+        ModernButton(btn_row, "Add Account", lambda: self._switch_view("accounts"), "primary", "+", w=180).pack(side="left", padx=(0, _Design.SPACING_SM))
+        ModernButton(btn_row, "Browse Mods", lambda: self._switch_view("mods"), "secondary", "📦", w=180).pack(side="left", padx=(0, _Design.SPACING_SM))
+        ModernButton(btn_row, "New Server", lambda: self._switch_view("server"), "ghost", "🖥", w=180).pack(side="left")
+
+        recent = tk.Frame(inner, bg=_Design.BG)
+        recent.pack(fill="x", pady=_Design.SPACING_LG)
+        tk.Label(recent, text="Recent Activity", bg=_Design.BG, fg=_Design.FG, font=("Segoe UI", 14, "bold")).pack(anchor="w", pady=(0, _Design.SPACING_MD))
+        self.recent_list = tk.Frame(recent, bg=_Design.BG)
+        self.recent_list.pack(fill="x")
+
+    def _refresh_dashboard_stats(self):
+        try:
+            versions = len([d for d in os.listdir(os.path.join(self.mc_dir, "versions")) if os.path.isdir(os.path.join(self.mc_dir, "versions", d))])
+        except: versions = 0
+        try:
+            accounts = len([a for a in (self.data.get("User-info") or []) if isinstance(a, dict) and a.get("username")])
+        except: accounts = 0
+        try:
+            mods = len([f for f in os.listdir(os.path.join(self.mc_dir, "mods")) if f.endswith(".jar")]) if os.path.exists(os.path.join(self.mc_dir, "mods")) else 0
+        except: mods = 0
+        try:
+            servers = len([d for d in os.listdir(os.path.join(self.mc_dir, "servers")) if os.path.isdir(os.path.join(self.mc_dir, "servers", d))]) if os.path.exists(os.path.join(self.mc_dir, "servers")) else 0
+        except: servers = 0
+        if hasattr(self, "stat_cards"):
+            self.stat_cards["versions"].config(text=str(versions))
+            self.stat_cards["accounts"].config(text=str(accounts))
+            self.stat_cards["mods"].config(text=str(mods))
+            self.stat_cards["servers"].config(text=str(servers))
+
+    def _build_accounts_view(self):
+        v = self.views["accounts"]
+        header = tk.Frame(v, bg=_Design.BG)
+        header.pack(fill="x", padx=_Design.SPACING_LG, pady=_Design.SPACING_LG)
+        tk.Label(header, text="Accounts", bg=_Design.BG, fg=_Design.FG, font=("Segoe UI", 24, "bold")).pack(anchor="w")
+        tk.Label(header, text="Manage your Minecraft accounts", bg=_Design.BG, fg=_Design.FG_SECONDARY, font=("Segoe UI", 11)).pack(anchor="w", pady=(4, 0))
+
+        add_row = tk.Frame(v, bg=_Design.BG)
+        add_row.pack(fill="x", padx=_Design.SPACING_LG, pady=(0, _Design.SPACING_LG))
+        ModernButton(add_row, "Add Account", self._account_add_dialog, "primary", "+", w=180).pack(side="left")
+
+        self.accounts_canvas = tk.Canvas(v, bg=_Design.BG, highlightthickness=0, bd=0)
+        self.accounts_canvas.pack(fill="both", expand=True, padx=_Design.SPACING_LG, pady=(0, _Design.SPACING_LG))
+        self.accounts_inner = tk.Frame(self.accounts_canvas, bg=_Design.BG)
+        self.accounts_canvas.create_window((0, 0), window=self.accounts_inner, anchor="nw")
+        self.accounts_inner.bind("<Configure>", lambda e: self.accounts_canvas.configure(scrollregion=self.accounts_canvas.bbox("all")))
+        self.accounts_canvas.bind_all("<MouseWheel>", self._accounts_mousewheel, add="+")
+        self._refresh_accounts()
+
+    def _build_game_view(self):
+        v = self.views["game"]
+        scroll = tk.Canvas(v, bg=_Design.BG, highlightthickness=0, bd=0)
+        scroll.pack(fill="both", expand=True, padx=_Design.SPACING_LG, pady=_Design.SPACING_LG)
+        inner = tk.Frame(scroll, bg=_Design.BG)
+        scroll.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: scroll.configure(scrollregion=scroll.bbox("all")))
+        scroll.bind_all("<MouseWheel>", lambda e: scroll.yview_scroll(-1*(e.delta//120), "units"), add="+")
+
+        header = tk.Frame(inner, bg=_Design.BG)
+        header.pack(fill="x", pady=(0, _Design.SPACING_LG))
+        tk.Label(header, text="Game Setup", bg=_Design.BG, fg=_Design.FG, font=("Segoe UI", 24, "bold")).pack(anchor="w")
+        tk.Label(header, text="Choose your game version, loader, and instance", bg=_Design.BG, fg=_Design.FG_SECONDARY, font=("Segoe UI", 11)).pack(anchor="w", pady=(4, 0))
+
+        row1 = tk.Frame(inner, bg=_Design.BG)
+        row1.pack(fill="x", pady=_Design.SPACING_MD)
+        row1.columnconfigure(0, weight=1)
+        row1.columnconfigure(1, weight=1)
+
+        loader_card = ModernCard(row1, elevated=True)
+        loader_card.grid(row=0, column=0, padx=(_Design.SPACING_SM, _Design.SPACING_SM//2), sticky="nsew")
+        tk.Label(loader_card, text="Game Type", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9)).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        self.selected_download = StringVar(value=(self.data.get("last_game_type") or "Vanilla"))
+        self.download_options = ttk.Combobox(loader_card, textvariable=self.selected_download, values=("Vanilla", "Forge", "NeoForge", "Fabric", "Quilt"), state="readonly", font=("Segoe UI", 11))
+        self.download_options.pack(fill="x", padx=_Design.SPACING_MD, pady=_Design.SPACING_MD)
+        self.download_options.bind("<<ComboboxSelected>>", self._on_type_change)
+        _last_type = self.data.get("last_game_type") or "Vanilla"
+        _types = ("Vanilla", "Forge", "NeoForge", "Fabric", "Quilt")
+        if _last_type in _types: self.download_options.current(_types.index(_last_type))
+
+        version_card = ModernCard(row1, elevated=True)
+        version_card.grid(row=0, column=1, padx=(_Design.SPACING_SM//2, _Design.SPACING_SM), sticky="nsew")
+        tk.Label(version_card, text="Version", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9)).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        self.versionsList = ttk.Combobox(version_card, state="readonly", font=("Segoe UI", 11))
+        self.versionsList.pack(fill="x", padx=_Design.SPACING_MD, pady=_Design.SPACING_MD)
+        self.versionsList.bind("<<ComboboxSelected>>", self._save_last_selection)
+        ModernButton(version_card, "+", self._add_custom_version, "ghost", "+", w=40).pack(anchor="e", padx=_Design.SPACING_MD, pady=(0, _Design.SPACING_MD))
+
+        row2 = tk.Frame(inner, bg=_Design.BG)
+        row2.pack(fill="x", pady=_Design.SPACING_MD)
+
+        inst_card = ModernCard(row2, elevated=True)
+        inst_card.pack(fill="x", pady=_Design.SPACING_MD)
+        tk.Label(inst_card, text="Instance", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9)).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        inst_row = tk.Frame(inst_card, bg=_Design.BG_SECONDARY)
+        inst_row.pack(fill="x", padx=_Design.SPACING_MD, pady=_Design.SPACING_MD)
+        self.instance_var = StringVar(value=(self.data.get("selected-instance") or "Default"))
+        self.instance_options = ttk.Combobox(inst_row, textvariable=self.instance_var, values=("Default",), state="readonly", font=("Segoe UI", 11))
+        self.instance_options.pack(side="left", fill="x", expand=True, padx=(0, _Design.SPACING_SM))
+        self.instance_options.bind("<<ComboboxSelected>>", self._on_instance_change)
+        ModernButton(inst_row, "New", self._new_instance, "secondary", "+", w=100).pack(side="left", padx=(0, _Design.SPACING_SM))
+        ModernButton(inst_row, "Open Folder", self._open_instance_folder, "ghost", "📁", w=130).pack(side="left", padx=(0, _Design.SPACING_SM))
+        ModernButton(inst_row, "Delete", self._delete_instance, "danger", "🗑", w=100).pack(side="left")
+
+        folder_card = ModernCard(inner, elevated=True)
+        folder_card.pack(fill="x", pady=_Design.SPACING_LG)
+        tk.Label(folder_card, text="Minecraft Directory", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9)).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        folder_row = tk.Frame(folder_card, bg=_Design.BG_SECONDARY)
+        folder_row.pack(fill="x", padx=_Design.SPACING_MD, pady=_Design.SPACING_MD)
+        self.path_var = StringVar(value=self.mc_dir)
+        ModernInput(folder_row, textvariable=self.path_var).pack(side="left", fill="x", expand=True, padx=(0, _Design.SPACING_SM))
+        ModernButton(folder_row, "Browse", self.browse_folder, "secondary", "📁", w=130).pack(side="left")
+
+        action_row = tk.Frame(inner, bg=_Design.BG)
+        action_row.pack(fill="x", pady=_Design.SPACING_XL)
+        ModernButton(action_row, "Download", self.handle_download, "primary", "⬇", w=200, h=48, font_size=13).pack(side="left", padx=(0, _Design.SPACING_MD))
+        ModernButton(action_row, "Play", self.handle_run, "success", "▶", w=200, h=48, font_size=13).pack(side="left")
+
+    def _build_mods_view(self):
+        v = self.views["mods"]
+        header = tk.Frame(v, bg=_Design.BG)
+        header.pack(fill="x", padx=_Design.SPACING_LG, pady=_Design.SPACING_LG)
+        tk.Label(header, text="Mod Manager", bg=_Design.BG, fg=_Design.FG, font=("Segoe UI", 24, "bold")).pack(anchor="w")
+        ModernButton(header, "Open Mod Downloader", self.open_mods_window, "primary", "⬇", w=220).pack(anchor="e")
+
+        self.mods_list = tk.Frame(v, bg=_Design.BG)
+        self.mods_list.pack(fill="both", expand=True, padx=_Design.SPACING_LG, pady=(0, _Design.SPACING_LG))
+
+    def _build_server_view(self):
+        v = self.views["server"]
+        self._build_server_page_in(v)
+
+    def _build_settings_view(self):
+        v = self.views["settings"]
+        scroll = tk.Canvas(v, bg=_Design.BG, highlightthickness=0, bd=0)
+        scroll.pack(fill="both", expand=True, padx=_Design.SPACING_LG, pady=_Design.SPACING_LG)
+        inner = tk.Frame(scroll, bg=_Design.BG)
+        scroll.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: scroll.configure(scrollregion=scroll.bbox("all")))
+        scroll.bind_all("<MouseWheel>", lambda e: scroll.yview_scroll(-1*(e.delta//120), "units"), add="+")
+
+        header = tk.Frame(inner, bg=_Design.BG)
+        header.pack(fill="x", pady=(0, _Design.SPACING_LG))
+        tk.Label(header, text="Settings", bg=_Design.BG, fg=_Design.FG, font=("Segoe UI", 24, "bold")).pack(anchor="w")
+        tk.Label(header, text="Configure your launcher preferences", bg=_Design.BG, fg=_Design.FG_SECONDARY, font=("Segoe UI", 11)).pack(anchor="w", pady=(4, 0))
+
+        perf_card = ModernCard(inner, elevated=True)
+        perf_card.pack(fill="x", pady=_Design.SPACING_MD)
+        tk.Label(perf_card, text="Performance", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9)).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        self.fps_var = StringVar(value="selected" if self.data.get("Fps-Boost") else "deselected")
+        ttk.Checkbutton(perf_card, text="FPS Boost (optimized JVM flags)", variable=self.fps_var, onvalue="selected", offvalue="deselected").pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_SM, _Design.SPACING_MD))
+        self.light_var = StringVar(value="selected" if self.data.get("Light-Mode", LOW_END) else "deselected")
+        ttk.Checkbutton(perf_card, text="Low resource mode (disable background)", variable=self.light_var, onvalue="selected", offvalue="deselected").pack(anchor="w", padx=_Design.SPACING_MD, pady=(0, _Design.SPACING_MD))
+
+        ram_card = ModernCard(inner, elevated=True)
+        ram_card.pack(fill="x", pady=_Design.SPACING_MD)
+        tk.Label(ram_card, text="RAM Allocation", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9)).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        try: total_ram = float(str(self.data["PC-info"][0]["Total-Ram"]).replace("GB", "").strip()) * 1000
+        except: total_ram = float(TOTAL_RAM_MB)
+        self.ram_var = DoubleVar(value=self.data.get("allocated_ram") or default_ram)
+        ram_row = tk.Frame(ram_card, bg=_Design.BG_SECONDARY)
+        ram_row.pack(fill="x", padx=_Design.SPACING_MD, pady=_Design.SPACING_MD)
+        ModernSlider(ram_row, from_=512, to=max(1024, total_ram), variable=self.ram_var, command=self._on_ram_change, height=8).pack(side="left", fill="x", expand=True, padx=(0, _Design.SPACING_MD))
+        self.ram_lbl = tk.Label(ram_row, text=f"{int(self.ram_var.get())} MB", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 10))
+        self.ram_lbl.pack(side="right")
+
+        jvm_card = ModernCard(inner, elevated=True)
+        jvm_card.pack(fill="x", pady=_Design.SPACING_MD)
+        tk.Label(jvm_card, text="JVM Arguments", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9)).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        tk.Label(jvm_card, text="Extra flags passed to Java (e.g. -XX:+UseG1GC)", bg=_Design.BG_SECONDARY, fg=_Design.FG_MUTED, font=("Segoe UI", 9)).pack(anchor="w", padx=_Design.SPACING_MD, pady=(0, _Design.SPACING_SM))
+        self.jvm_var = StringVar(value=self.data.get("jvm-args") or "")
+        ModernInput(jvm_card, textvariable=self.jvm_var).pack(fill="x", padx=_Design.SPACING_MD, pady=(0, _Design.SPACING_MD))
+
+        dir_card = ModernCard(inner, elevated=True)
+        dir_card.pack(fill="x", pady=_Design.SPACING_MD)
+        tk.Label(dir_card, text="Game Directory", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9)).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        dir_row = tk.Frame(dir_card, bg=_Design.BG_SECONDARY)
+        dir_row.pack(fill="x", padx=_Design.SPACING_MD, pady=_Design.SPACING_MD)
+        self.settings_path_var = StringVar(value=self.data.get("Minecraft-home", ""))
+        ModernInput(dir_row, textvariable=self.settings_path_var).pack(side="left", fill="x", expand=True, padx=(0, _Design.SPACING_SM))
+        ModernButton(dir_row, "Browse", lambda: self.settings_path_var.set(filedialog.askdirectory() or self.settings_path_var.get()), "secondary", "📁", w=110).pack(side="left")
+
+        ModernButton(inner, "Save Settings", self._save_settings, "success", "✓", w=200, h=44, font_size=12).pack(pady=_Design.SPACING_XL)
+
+    def _on_ram_change(self, v=None):
+        if hasattr(self, "ram_lbl"): self.ram_lbl.config(text=f"{int(float(self.ram_var.get()))} MB")
+
+    def _save_settings(self):
+        self.data["Minecraft-home"] = self.settings_path_var.get().strip()
+        self.data["Fps-Boost"] = self.fps_var.get() == "selected"
+        self.data["Light-Mode"] = self.light_var.get() == "selected"
+        self.data["allocated_ram"] = float(self.ram_var.get())
+        self.data["jvm-args"] = self.jvm_var.get().strip() or None
+        save_settings(self.data)
+        self.path_var.set(self.data["Minecraft-home"])
+        self.mc_dir = self.data["Minecraft-home"]
+        self.light = self.data["Light-Mode"]
+        showinfo("Saved", "Settings saved. Restart for full effect.")
 
     def _draw_background(self, file=None):
-        self.canvas.delete("all")
+        if not hasattr(self, "main_container"):
+            return
         use_bg = (not self.light) and (not LOW_END) and self.W >= 640
         img = None
         fname = file or self._current_slide()
@@ -989,7 +1711,6 @@ class Pycraft:
         if img is not None:
             try:
                 from PIL import Image, ImageTk
-                                                                                 
                 iw, ih = img.size
                 scale = max(self.W / max(1, iw), self.H / max(1, ih))
                 nw, nh = max(1, int(iw * scale)), max(1, int(ih * scale))
@@ -997,17 +1718,27 @@ class Pycraft:
                 left = max(0, (nw - self.W) // 2)
                 top = max(0, (nh - self.H) // 2)
                 resized = resized.crop((left, top, min(nw, left + self.W), min(nh, top + self.H)))
-                base = Image.new("RGB", (self.W, self.H), (14, 16, 19))
-                blended = Image.blend(base, resized, 0.55)
+                base = Image.new("RGB", (self.W, self.H), (10, 10, 10))
+                blended = Image.blend(base, resized, 0.5)
                 self._bg_tk = ImageTk.PhotoImage(blended)
-                self.canvas.create_image(0, 0, image=self._bg_tk, anchor="nw")
+                if not hasattr(self, "_bg_label"):
+                    self._bg_label = tk.Label(self.main_container, image=self._bg_tk)
+                    self._bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+                    self._bg_label.lower()
+                else:
+                    self._bg_label.config(image=self._bg_tk)
                 return
             except Exception:
                 import traceback
                 traceback.print_exc()
             try:
                 self.bg_img = PhotoImage(file=os.path.join("img", fname))
-                self.canvas.create_image(self.W // 2, self.H // 2, image=self.bg_img)
+                if not hasattr(self, "_bg_label"):
+                    self._bg_label = tk.Label(self.main_container, image=self.bg_img)
+                    self._bg_label.place(x=0, y=0, relwidth=1, relheight=1)
+                    self._bg_label.lower()
+                else:
+                    self._bg_label.config(image=self.bg_img)
             except Exception:
                 import traceback
                 traceback.print_exc()
@@ -1034,52 +1765,99 @@ class Pycraft:
         if len(files) > 1:
             self.window.after(12000, self._slideshow_tick)
 
-    def _show_registered(self, widget):
-        for spec in self._layout_specs:
-            if spec[0] is widget:
-                _, x, y, wd, ht = spec
-                kw = {"x": self._x(self._resolve(x)), "y": self._y(self._resolve(y))}
-                if wd is not None:
-                    kw["width"] = self._x(self._resolve(wd))
-                if ht is not None:
-                    kw["height"] = self._y(ht)
-                widget.place(**kw)
-                return
+    def _account_add_dialog(self):
+        win = tk.Toplevel(self.window)
+        win.title("Add Account")
+        win.geometry("400x350")
+        win.configure(bg=_Design.BG)
+        win.transient(self.window)
+        win.grab_set()
+        try: win.iconbitmap("icon.ico")
+        except: pass
 
-    def _switch_tab(self, tab):
-        if tab == self.active_tab:
+        tk.Label(win, text="Add Account", bg=_Design.BG, fg=_Design.FG, font=("Segoe UI", 16, "bold")).pack(pady=(_Design.SPACING_LG, _Design.SPACING_SM), padx=_Design.SPACING_LG, anchor="w")
+        tk.Label(win, text="Choose account type and enter credentials", bg=_Design.BG, fg=_Design.FG_SECONDARY).pack(anchor="w", padx=_Design.SPACING_LG)
+
+        card = ModernCard(win, elevated=True)
+        card.pack(fill="both", expand=True, padx=_Design.SPACING_LG, pady=_Design.SPACING_LG)
+
+        tk.Label(card, text="Account Type", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9)).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        auth_var = StringVar(value="cracked login")
+        ttk.Combobox(card, textvariable=auth_var, values=("cracked login", "ely_by login"), state="readonly", font=("Segoe UI", 11)).pack(fill="x", padx=_Design.SPACING_MD, pady=(_Design.SPACING_SM, _Design.SPACING_MD))
+
+        tk.Label(card, text="Username", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9)).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        user_entry = ModernInput(card, placeholder="Username")
+        user_entry.pack(fill="x", padx=_Design.SPACING_MD, pady=(_Design.SPACING_SM, _Design.SPACING_MD))
+
+        tk.Label(card, text="Password (optional for cracked)", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY, font=("Segoe UI", 9)).pack(anchor="w", padx=_Design.SPACING_MD, pady=(_Design.SPACING_MD, 0))
+        pass_entry = ModernInput(card, placeholder="Password", show="•")
+        pass_entry.pack(fill="x", padx=_Design.SPACING_MD, pady=(_Design.SPACING_SM, _Design.SPACING_MD))
+
+        def do_add():
+            u = user_entry.get_value()
+            p = pass_entry.get_value()
+            a = auth_var.get()
+            if not u:
+                showerror("Error", "Username required")
+                return
+            _accs = [a for a in (self.data.get("User-info") or []) if isinstance(a, dict) and a.get("username")]
+            _accs.append({"username": u, "AUTH_TYPE": a, "UUID": str(uuid.uuid4())})
+            self.data["User-info"] = _accs
+            save_settings(self.data)
+            self.username = u
+            win.destroy()
+            self._refresh_accounts()
+
+        btn_row = tk.Frame(card, bg=_Design.BG_SECONDARY)
+        btn_row.pack(fill="x", padx=_Design.SPACING_MD, pady=_Design.SPACING_MD)
+        ModernButton(btn_row, "Cancel", win.destroy, "ghost", "✕", w=100).pack(side="right", padx=(_Design.SPACING_SM, 0))
+        ModernButton(btn_row, "Add", do_add, "success", "✓", w=100).pack(side="right")
+
+    def _build_server_page_in(self, parent):
+        header = tk.Frame(parent, bg=_Design.BG)
+        header.pack(fill="x", padx=_Design.SPACING_LG, pady=_Design.SPACING_LG)
+        tk.Label(header, text="Server Manager", bg=_Design.BG, fg=_Design.FG, font=("Segoe UI", 24, "bold")).pack(anchor="w")
+        ModernButton(header, "Create Server", self._srv_open_create, "primary", "+", w=180).pack(anchor="e")
+
+        self.server_content = tk.Frame(parent, bg=_Design.BG)
+        self.server_content.pack(fill="both", expand=True, padx=_Design.SPACING_LG, pady=(0, _Design.SPACING_LG))
+        self._srv_render_page_new()
+
+    def _srv_render_page_new(self):
+        for w in self.server_content.winfo_children():
+            w.destroy()
+        servers = self._list_servers()
+        if not servers:
+            empty = ModernCard(self.server_content, elevated=True)
+            empty.pack(fill="both", expand=True, padx=_Design.SPACING_XL, pady=_Design.SPACING_XL)
+            body = tk.Frame(empty, bg=_Design.BG_SECONDARY)
+            body.place(relx=0.5, rely=0.5, anchor="center")
+            tk.Label(body, text="🖥", bg=_Design.BG_SECONDARY, fg=_Design.ACCENT, font=("Segoe UI", 48)).pack(pady=(0, _Design.SPACING_MD))
+            tk.Label(body, text="No Servers Yet", bg=_Design.BG_SECONDARY, fg=_Design.FG, font=("Segoe UI", 16, "bold")).pack()
+            tk.Label(body, text="Click \"Create Server\" to host your first Minecraft server", bg=_Design.BG_SECONDARY, fg=_Design.FG_SECONDARY).pack(pady=(_Design.SPACING_SM, 0))
+            ModernButton(body, "Create Server", self._srv_open_create, "primary", "+", w=200).pack(pady=(_Design.SPACING_MD, 0))
             return
-        self.active_tab = tab
-        if tab == "server":
-            for spec in self._layout_specs:
-                w = spec[0]
-                if (w is not self.server_frame and w not in self._always_visible
-                        and w.winfo_ismapped()):
-                    w.place_forget()
-            self._show_registered(self.server_frame)
-            self.tab_client.config(fg=self.muted)
-            self.tab_server.config(fg=self.accent)
-            self.tab_line_c.place_forget()
-            self._show_registered(self.tab_line_s)
-            self._srv_render_page()
-            self.header_frame.lift()
-            for h in self._rz_handles:
-                h.lift()
-        else:
-            if self.server_frame.winfo_ismapped():
-                self.server_frame.place_forget()
-            for spec in self._layout_specs:
-                w = spec[0]
-                if (w is not self.server_frame and w is not self.tab_line_s
-                        and w not in self._keep_hidden and not w.winfo_ismapped()):
-                    self._show_registered(w)
-            self.tab_client.config(fg=self.accent)
-            self.tab_server.config(fg=self.muted)
-            self._show_registered(self.tab_line_c)
-            self.tab_line_s.place_forget()
-            self.header_frame.lift()
-            for h in self._rz_handles:
-                h.lift()
+
+        list_frame = tk.Frame(self.server_content, bg=_Design.BG)
+        list_frame.pack(fill="both", expand=True)
+        canvas = tk.Canvas(list_frame, bg=_Design.BG, highlightthickness=0)
+        scroll = ttk.Scrollbar(list_frame, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scroll.set)
+        scroll.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        inner = tk.Frame(canvas, bg=_Design.BG)
+        canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind_all("<MouseWheel>", lambda e: canvas.yview_scroll(-1*(e.delta//120), "units"), add="+")
+
+        for s in servers:
+            card = ModernCard(inner, elevated=True)
+            card.pack(fill="x", padx=_Design.SPACING_MD, pady=_Design.SPACING_SM)
+            row = tk.Frame(card, bg=_Design.BG_SECONDARY)
+            row.pack(fill="x", padx=_Design.SPACING_MD, pady=_Design.SPACING_MD)
+            tk.Label(row, text=s, bg=_Design.BG_SECONDARY, fg=_Design.FG, font=("Segoe UI", 12, "bold")).pack(side="left")
+            ModernButton(row, "Start", lambda n=s: self._srv_start_server(n), "success", "▶", w=100).pack(side="right", padx=(_Design.SPACING_SM, 0))
+            ModernButton(row, "Manage", lambda n=s: self._srv_manage_server(n), "secondary", "⚙", w=100).pack(side="right")
 
     def _on_window_resize(self, event):
         if event.widget is not self.window:
@@ -1095,54 +1873,13 @@ class Pycraft:
             except Exception:
                 pass
                                                                          
-        self._rz_fast_job = self.window.after(25, self._relayout_widgets)
+        self._rz_fast_job = self.window.after(25, self._relayout)
         self._resize_job = self.window.after(180, self._relayout)
 
     def _relayout(self):
         self._resize_job = None
-        self._relayout_widgets()
         self._draw_background()
 
-    def _relayout_widgets(self):
-        self._rz_fast_job = None
-        w = self.window.winfo_width()
-        h = self.window.winfo_height()
-        if w < 50 or h < 50:
-            return
-        if abs(w - self.W) < 2 and abs(h - self.H) < 2:
-            return
-        self.W, self.H = w, h
-        self.sx = self.W / 1100.0
-        self.sy = self.H / 650.0
-        self.sf = min(self.sx, self.sy)
-        self._update_colmap()
-        self.canvas.config(width=self.W, height=self.H)
-        for widget, x, y, wd, ht in self._layout_specs:
-            try:
-                if not widget.winfo_ismapped():
-                    continue
-                kw = {"x": self._x(self._resolve(x)), "y": self._y(self._resolve(y))}
-                if wd is not None:
-                    kw["width"] = self._x(self._resolve(wd))
-                if ht is not None:
-                    kw["height"] = self._y(ht)
-                widget.place(**kw)
-            except Exception:
-                pass
-        for widget, base, weight in self._font_specs:
-            try:
-                widget.config(font=("Segoe UI", self._fs(base), weight) if weight else ("Segoe UI", self._fs(base)))
-            except Exception:
-                pass
-                                        
-        try:
-            self.header_frame.lift()
-            for h in self._rz_handles:
-                h.lift()
-        except Exception:
-            pass
-
-                                        
     def _build_console(self):
         self.console_win = None
         self.console_text = None
@@ -1286,8 +2023,8 @@ class Pycraft:
         try:
             self.progress_bar.stop()
             self.progress_bar.config(mode="determinate", value=0)
-            self.progress_bar.place(x=self._x(320), y=self._y(588), width=self._x(640), height=self._y(16))
-            self.progress_lbl.place(x=self._x(968), y=self._y(588), width=self._x(100), height=self._y(16))
+            self.progress_bar.place(relx=0.2, rely=0.3, relwidth=0.6, height=12)
+            self.progress_lbl.place(relx=0.85, rely=0.3)
             self.progress_lbl.config(text="0%")
         except Exception:
             pass
@@ -1677,33 +2414,37 @@ class Pycraft:
             self.data = data
         except Exception:
             pass
-        if t == "Vanilla":
-            self._keep_hidden.add(self.mods_btn)
-            try:
-                self.mods_btn.place_forget()
-            except Exception:
-                pass
-        else:
-            self._keep_hidden.discard(self.mods_btn)
-            try:
-                self.mods_btn.place(x=self._x(self._resolve("col2")), y=self._y(298),
-                                    width=self._x(300), height=self._y(36))
-            except Exception:
-                pass
+        mb = getattr(self, "mods_btn", None)
+        if mb is not None:
+            if t == "Vanilla":
+                self._keep_hidden.add(mb)
+                try:
+                    mb.place_forget()
+                except Exception:
+                    pass
+            else:
+                self._keep_hidden.discard(mb)
+                try:
+                    mb.place(x=self._x(self._resolve("col2")), y=self._y(298),
+                             width=self._x(300), height=self._y(36))
+                except Exception:
+                    pass
+        ic = getattr(self, "installed_chk", None)
+        if ic is not None:
+            if t in ("Forge", "NeoForge", "Fabric", "Quilt"):
+                ic.configure(state="disabled")
+            else:
+                ic.configure(state="normal")
         if t == "Forge":
-            self.installed_chk.configure(state="disabled")
             self._load_forge_versions()
         elif t == "NeoForge":
-            self.installed_chk.configure(state="disabled")
             self._load_neoforge_versions()
         elif t == "Fabric":
-            self.installed_chk.configure(state="disabled")
             self._load_fabric_versions()
         elif t == "Quilt":
-            self.installed_chk.configure(state="disabled")
             self._load_quilt_versions()
         else:
-            self.installed_chk.configure(state="normal")
+            self._keep_hidden.discard("installed_chk")
             self._load_vanilla_versions()
 
     def _add_custom_version(self):
@@ -1792,6 +2533,11 @@ class Pycraft:
         except Exception:
             pass
         self._update_chip()
+        if getattr(self, "play_instance_cb", None):
+            try:
+                self._launch_fill_instances()
+            except Exception:
+                pass
 
     def _on_instance_change(self, event=None):
         data = load_settings()
@@ -1899,155 +2645,6 @@ class Pycraft:
             except Exception:
                 return "127.0.0.1"
 
-    def _build_server_page(self):
-        pass                                        
-
-    def _srv_render_page(self):
-        for w in self.server_frame.winfo_children():
-            w.destroy()
-        servers = self._list_servers()
-        if self._srv_selected not in servers:
-            self._srv_selected = servers[0] if servers else None
-
-        if not servers:
-            empty = tk.Frame(self.server_frame, bg=self.bg)
-            empty.place(relx=0.5, rely=0.42, anchor="center")
-            plus = tk.Label(empty, text="+", font=("Segoe UI", 64), bg=self.bg, fg=self.accent, cursor="hand2")
-            plus.pack()
-            txt = tk.Label(empty, text="Add Server", font=("Segoe UI", 14, "bold"), bg=self.bg, fg=self.fg, cursor="hand2")
-            txt.pack()
-            hint = tk.Label(empty, text="Host a Minecraft server on this PC", font=self.f_small, bg=self.bg, fg=self.muted)
-            hint.pack(pady=(4, 0))
-            for w in (plus, txt):
-                w.bind("<Button-1>", lambda e: self._srv_open_create())
-                w.bind("<Enter>", lambda e: txt.config(fg=self.accent))
-                w.bind("<Leave>", lambda e: txt.config(fg=self.fg))
-            return
-
-        page = tk.Frame(self.server_frame, bg=self.bg)
-        page.place(x=self._x(16), y=self._y(64), width=self._x(1068), height=self._y(560))
-
-                 
-        side = RoundedFrame(page, self.card, self.border, radius=18, surround=self.bg)
-        side.pack(side="left", fill="y", padx=(0, 12))
-        tk.Label(side, text="SERVERS", font=self.f_tiny, bg=self.card, fg=self.muted).pack(anchor="w", padx=10, pady=(10, 4))
-        self.srv_list = tk.Listbox(
-            side, bg=self.input_bg, fg="white", relief="flat", highlightthickness=0,
-            selectbackground=self.accent, selectforeground="white", font=self.f_small,
-            activestyle="none", width=20
-        )
-        self.srv_list.pack(fill="both", expand=True, padx=8, pady=(0, 8))
-        for s in servers:
-            self.srv_list.insert("end", s)
-            if s == self._srv_selected:
-                self.srv_list.selection_set("end")
-        self.srv_list.bind("<<ListboxSelect>>", self._srv_on_select)
-        add_b = self._button(side, "＋  Add Server", self._srv_open_create, self.green, self.green_hover, self.f_small, w=self._x(180), h=self._x(30), radius=12)
-        add_b.pack(padx=8, pady=(0, 10))
-
-                   
-        dash = tk.Frame(page, bg=self.bg)
-        dash.pack(side="left", fill="both", expand=True)
-        meta = self._srv_meta_load(self._srv_dir(self._srv_selected)) if self._srv_selected else {}
-
-        head = tk.Frame(dash, bg=self.bg)
-        head.pack(fill="x")
-        tk.Label(head, text=self._srv_selected or "", font=self.f_title, bg=self.bg, fg=self.fg).pack(side="left")
-        _soft_id = meta.get("software", "vanilla")
-        _soft_info = next((v for v in self._SERVER_SOFTWARE.values() if v["id"] == _soft_id), None)
-        if _soft_info:
-            tk.Label(head, text=f"  {_soft_info['cls'].upper()}", font=self.f_tiny, bg=self.bg,
-                     fg=_soft_info["color"]).pack(side="left", pady=(10, 0))
-        self.srv_dot = tk.Label(head, text="●", font=self.f_small, bg=self.bg,
-                                fg={"online": self.green, "starting": "#fbbf24"}.get(self._srv_status, self.red))
-        self.srv_dot.pack(side="left", padx=(14, 4))
-        self.srv_status_lbl = tk.Label(head, text=self._srv_status.upper(), font=self.f_small, bg=self.bg, fg=self.muted)
-        self.srv_status_lbl.pack(side="left")
-        toggle_txt = "■  STOP" if self._srv_status in ("online", "starting") else "▶  START"
-        toggle_bg = self.red if self._srv_status in ("online", "starting") else self.green
-        toggle_hov = self.red_hover if self._srv_status in ("online", "starting") else self.green_hover
-        self.srv_toggle = self._button(head, toggle_txt, self._srv_toggle_server, toggle_bg, toggle_hov, f_btn := ("Segoe UI", self._fs(11), "bold"), w=self._x(130), h=self._x(34), radius=12)
-        self.srv_toggle.pack(side="right")
-        self.srv_delete_btn = self._button(head, "DELETE", self._srv_delete_server, self.red, self.red_hover, f_btn, w=self._x(110), h=self._x(34), radius=12)
-        self.srv_delete_btn.pack(side="right", padx=(0, 8))
-
-        info = RoundedFrame(dash, self.card, self.border, radius=16, surround=self.bg)
-        info.pack(fill="x", pady=(10, 8))
-        info_inner = tk.Frame(info, bg=self.card)
-        info_inner.pack(fill="x", padx=12, pady=8)
-        ip = self._lan_ip()
-        port = meta.get("port", 25565)
-        tk.Label(info_inner, text=f"LOCAL IP  {ip}", font=self.f_small, bg=self.card, fg=self.fg).pack(side="left")
-        tk.Label(info_inner, text=f"PORT  {port}", font=self.f_small, bg=self.card, fg=self.fg).pack(side="left", padx=(18, 0))
-        tk.Label(info_inner, text=f"{ip}:{port}  —  friends join with this (port-forward {port} for internet play)",
-                 font=self.f_tiny, bg=self.card, fg=self.muted).pack(side="right")
-
-        cols = tk.Frame(dash, bg=self.bg)
-        cols.pack(fill="both", expand=True)
-
-                 
-        con = RoundedFrame(cols, self.card, self.border, radius=16, surround=self.bg)
-        con.pack(side="left", fill="both", expand=True, padx=(0, 10))
-        tk.Label(con, text="CONSOLE", font=self.f_tiny, bg=self.card, fg=self.muted).pack(anchor="w", padx=8, pady=(6, 0))
-        cwrap = tk.Frame(con, bg=self.card)
-        cwrap.pack(fill="both", expand=True, padx=8, pady=(2, 6))
-        self.srv_console_text = tk.Text(
-            cwrap, bg="#0d0f12", fg="#c9d4e3", font=("Consolas", max(7, self._fs(9))),
-            state="disabled", bd=0, highlightthickness=0, wrap="word"
-        )
-        c_scroll = ttk.Scrollbar(cwrap, orient="vertical", command=self.srv_console_text.yview)
-        self.srv_console_text.configure(yscrollcommand=c_scroll.set)
-        self.srv_console_text.tag_configure("err", foreground="#ff6b6b")
-        self.srv_console_text.tag_configure("info", foreground="#6da2ff")
-        c_scroll.pack(side="right", fill="y")
-        self.srv_console_text.pack(side="left", fill="both", expand=True)
-        for line in self._srv_buffer():
-            self.srv_console_text.config(state="normal")
-            self.srv_console_text.insert("end", line + "\n", self._srv_line_tag(line))
-            self.srv_console_text.see("end")
-            self.srv_console_text.config(state="disabled")
-        send_row = tk.Frame(con, bg=self.card)
-        send_row.pack(fill="x", padx=8, pady=(0, 8))
-        self.srv_cmd_var = StringVar()
-        cmd_entry = self._entry(send_row, textvariable=self.srv_cmd_var, font=self.f_small)
-        cmd_entry.pack(side="left", fill="x", expand=True, ipady=4)
-        cmd_entry.bind("<Return>", lambda e: self._srv_send())
-        send_b = self._button(send_row, "Send", self._srv_send, self.accent, self.accent_hover, self.f_small, w=60, h=28, radius=12)
-        send_b.pack(side="left", padx=(6, 0))
-
-                                       
-        right = tk.Frame(cols, bg=self.bg, width=self._x(280))
-        right.pack(side="right", fill="y")
-        right.pack_propagate(False)
-
-        players_card = RoundedFrame(right, self.card, self.border, radius=16, surround=self.bg)
-        players_card.pack(fill="x", pady=(0, 10))
-        tk.Label(players_card, text=f"PLAYERS ONLINE · {len(self._srv_players)}", font=self.f_tiny, bg=self.card, fg=self.muted).pack(anchor="w", padx=8, pady=(6, 2))
-        self.srv_players_list = tk.Listbox(
-            players_card, bg=self.input_bg, fg="white", relief="flat", highlightthickness=0,
-            selectbackground=self.accent, font=self.f_small, height=5, activestyle="none"
-        )
-        self.srv_players_list.pack(fill="x", padx=8, pady=(0, 8))
-        for p in sorted(self._srv_players):
-            self.srv_players_list.insert("end", p)
-
-        files_card = RoundedFrame(right, self.card, self.border, radius=16, surround=self.bg)
-        files_card.pack(fill="both", expand=True)
-        tk.Label(files_card, text="FILES", font=self.f_tiny, bg=self.card, fg=self.muted).pack(anchor="w", padx=8, pady=(6, 2))
-        self._fm_path = self._srv_dir(self._srv_selected)
-        self.srv_files_list = tk.Listbox(
-            files_card, bg=self.input_bg, fg="white", relief="flat", highlightthickness=0,
-            selectbackground=self.accent, font=("Consolas", max(7, self._fs(9))), activestyle="none"
-        )
-        self.srv_files_list.pack(fill="both", expand=True, padx=8, pady=(0, 4))
-        self.srv_files_list.bind("<Double-1>", lambda e: self._fm_navigate())
-        frow = tk.Frame(files_card, bg=self.card)
-        frow.pack(fill="x", padx=8, pady=(0, 8))
-        self._button(frow, "Up", lambda: self._fm_up(), self.gray_btn, self.gray_hover, self.f_tiny, w=self._x(52), h=self._x(24), radius=6).pack(side="left", padx=(0, 4))
-        self._button(frow, "Delete", lambda: self._fm_delete(), self.red, self.red_hover, self.f_tiny, w=self._x(62), h=self._x(24), radius=6).pack(side="left", padx=(0, 4))
-        self._button(frow, "Open", lambda: self._fm_open(), self.gray_btn, self.gray_hover, self.f_tiny, w=self._x(56), h=self._x(24), radius=6).pack(side="left")
-        self._fm_refresh()
-
     def _srv_buffer(self):
         if not hasattr(self, "_srv_buffers"):
             self._srv_buffers = {}
@@ -2066,7 +2663,7 @@ class Pycraft:
         sel = self.srv_list.curselection()
         if sel:
             self._srv_selected = self.srv_list.get(sel[0])
-            self._srv_render_page()
+            self._srv_render_page_new()
 
     def _srv_open_create(self):
         win = tk.Toplevel(self.window)
@@ -2205,8 +2802,8 @@ class Pycraft:
             total_ram = 8192
         ram_var = DoubleVar(value=min(2048, total_ram // 2))
         ram_lbl = tk.Label(c3, text=f"{int(ram_var.get())} MB", font=self.f_small, bg=self.card, fg=self.muted)
-        ttk.Scale(c3, from_=512, to=max(1024, total_ram), variable=ram_var,
-                  command=lambda v: ram_lbl.config(text=f"{int(float(v))} MB")).pack(fill="x", pady=(4, 0))
+        ModernSlider(c3, from_=512, to=max(1024, total_ram), variable=ram_var,
+                     command=lambda v: ram_lbl.config(text=f"{int(float(v))} MB"), height=8).pack(fill="x", pady=(4, 0))
         ram_lbl.pack()
 
         c4 = card("JVM ARGUMENTS")
@@ -2276,7 +2873,7 @@ class Pycraft:
             self._srv_selected = name
             self._console_write(f"[server] Created server '{name}' ({version})", "info")
             win.destroy()
-            self._srv_render_page()
+            self._srv_render_page_new()
             self._srv_download_jar_async(d, meta)
 
         self._button(win, "CREATE SERVER", do_create, self.green, self.green_hover, ("Segoe UI", 11, "bold"), h=38, radius=12).pack(fill="x", padx=18, pady=14)
@@ -2451,7 +3048,7 @@ class Pycraft:
             return
         self._console_write(f"[server] Deleted server '{name}'", "info")
         self._srv_selected = None
-        self._srv_render_page()
+        self._srv_render_page_new()
 
     def _srv_set_status(self, state):
         self._srv_status = state
@@ -3034,16 +3631,12 @@ class Pycraft:
             wdg.bind("<Enter>", lambda e: row_hover(e, True))
             wdg.bind("<Leave>", lambda e: row_hover(e, False))
 
-        for text, color, hover, cmd in (
-            ("Del", self.red, self.red_hover, lambda u=uname: self._account_delete(u)),
-            ("Edit", self.accent, self.accent_hover, lambda u=uname: self._account_edit(u)),
-            ("Login", self.green, self.green_hover, login_action),
+        for text, variant, cmd in (
+            ("Del", "danger", lambda u=uname: self._account_delete(u)),
+            ("Edit", "primary", lambda u=uname: self._account_edit(u)),
+            ("Login", "success", login_action),
         ):
-            b = RoundButton(
-                row, self, text, cmd, color, hover, "#ffffff",
-                base=8, weight=None, radius=9, surround=row_bg,
-                w=self._x(46), h=self._x(20)
-            )
+            b = ModernButton(row, text, cmd, variant, w=self._x(46), h=self._x(20), font_size=9)
             b.pack(side="right", padx=(2, 0))
 
     def _account_login(self, username):
